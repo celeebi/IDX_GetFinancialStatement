@@ -122,5 +122,6 @@ class DriverCalculator:
 
         return {
             "3_Year_Median": median_3yr,
-            "5_Year_Average": avg_5yr
+            "5_Year_Average": avg_5yr,
+            "Historical_Average": avg_5yr
         }

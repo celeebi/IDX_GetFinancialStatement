@@ -12,6 +12,7 @@ from .api import IDXApi
 from .excel_parser import parse_financial_statement_file
 from .xbrl_parser import XBRLParser
 from .multi_year import merge_statement_tables
+from .year_utils import format_year_range_slug, format_year_range_label
 from .proforma import FinancialNormalizer, DriverCalculator, ReadyToForecastExporter
 
 logger = logging.getLogger("idx_scraper.scraper")
@@ -29,37 +30,58 @@ class IDXFinancialScraper:
     def scrape_ticker(
         self,
         ticker: str,
-        start_year: int = 2019,
-        end_year: int = 2024,
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None,
+        years: Optional[List[int]] = None,
         period: str = "audit",
         parse_and_export: bool = True
     ) -> Dict[str, Any]:
         """
-        Scrape financial statements for a specific ticker across a multi-year range.
+        Scrape financial statements for a specific ticker across a single year, a range, or an arbitrary list of years.
         
         Args:
             ticker: Stock ticker code (e.g., 'BBCA', 'TLKM', 'ASII')
-            start_year: Starting year (e.g., 2019)
-            end_year: Ending year (e.g., 2024)
+            start_year: Optional start year
+            end_year: Optional end year
+            years: Optional explicit list of years (e.g. [2023], [2020, 2021, 2022], [2019, 2021, 2023])
             period: Reporting period ('audit', 'tw1', 'tw2', 'tw3')
             parse_and_export: Whether to parse Excel files and export a multi-year consolidated Excel workbook
         """
         ticker = ticker.strip().upper()
-        print(f"\n[+] Searching filings for {ticker} ({start_year} - {end_year}, Period: {period})...")
+
+        # Resolve years to query
+        if years is not None:
+            years_to_query = sorted(list(set(years)))
+        elif start_year is not None and end_year is not None:
+            years_to_query = list(range(min(start_year, end_year), max(start_year, end_year) + 1))
+        elif start_year is not None:
+            years_to_query = [start_year]
+        else:
+            years_to_query = [2020, 2021, 2022, 2023, 2024]
+
+        year_label = format_year_range_label(years_to_query)
+        year_slug = format_year_range_slug(years_to_query)
+        print(f"\n[+] Searching filings for {ticker} ({year_label}, Period: {period})...")
 
         # 1. Query filing history
         filings = self.api.get_filing_history(
             kode_emiten=ticker,
-            start_year=start_year,
-            end_year=end_year,
+            years=years_to_query,
             period=period
         )
 
         if not filings:
-            print(f"[-] No filings found for {ticker} in range {start_year}-{end_year}.")
+            print(f"[-] No filings found for {ticker} across: {year_label}.")
             return {"ticker": ticker, "status": "no_filings", "downloaded_files": [], "compiled_excel": None}
 
-        print(f"[+] Found {len(filings)} filings for {ticker}.")
+        # Check if any requested years were not found on IDX
+        filing_years_found = {f["year"] for f in filings}
+        missing_years = [y for y in years_to_query if y not in filing_years_found]
+        if missing_years:
+            print(f"  [i] Note: No online filings published on IDX portal for years {missing_years}.")
+            print(f"  [+] Found {len(filings)} filings: {sorted(list(filing_years_found))}")
+        else:
+            print(f"[+] Found {len(filings)} filings for {ticker}.")
 
         # 2. Download standardized Excel files
         downloaded_files = []
@@ -118,7 +140,7 @@ class IDXFinancialScraper:
             latest_info = parsed_reports[-1].get("general_info", {})
             info_df = pd.DataFrame(list(latest_info.items()), columns=["Field", "Value"])
 
-            compiled_excel_name = f"{ticker}_financial_statements_{start_year}_{end_year}.xlsx"
+            compiled_excel_name = f"{ticker}_financial_statements_{year_slug}.xlsx"
             compiled_excel_path = os.path.join(ticker_dir, compiled_excel_name)
 
             with pd.ExcelWriter(compiled_excel_path, engine="openpyxl") as writer:
@@ -145,21 +167,34 @@ class IDXFinancialScraper:
     def build_ready_to_forecast(
         self,
         ticker: str,
-        start_year: int = 2020,
-        end_year: int = 2024
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None,
+        years: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """
-        Extract, normalize, and compile 5-year clean historical financial statements
-        and operational drivers into a Ready-to-Forecast Excel model.
+        Extract, normalize, and compile clean historical financial statements
+        and operational drivers into a Ready-to-Forecast Excel model across any time horizon.
         """
         ticker = ticker.strip().upper()
-        print(f"\n[+] Preparing Ready-to-Forecast Financials for {ticker} ({start_year} - {end_year})...")
+
+        # Resolve years to process
+        if years is not None:
+            years_to_process = sorted(list(set(years)))
+        elif start_year is not None and end_year is not None:
+            years_to_process = list(range(min(start_year, end_year), max(start_year, end_year) + 1))
+        elif start_year is not None:
+            years_to_process = [start_year]
+        else:
+            years_to_process = [2020, 2021, 2022, 2023, 2024]
+
+        year_label = format_year_range_label(years_to_process)
+        year_slug = format_year_range_slug(years_to_process)
+        print(f"\n[+] Preparing Ready-to-Forecast Financials for {ticker} ({year_label})...")
 
         # 1. Ensure files are scraped and multi-year raw tables exist
         scrape_res = self.scrape_ticker(
             ticker=ticker,
-            start_year=start_year,
-            end_year=end_year,
+            years=years_to_process,
             period="audit",
             parse_and_export=True
         )
@@ -184,16 +219,26 @@ class IDXFinancialScraper:
                 if pd.notna(r.iloc[0]):
                     info_dict[str(r.iloc[0])] = str(r.iloc[1]) if pd.notna(r.iloc[1]) else ""
 
+        # Filter years_to_process to only those years where data was actually found
+        # (either downloaded in ticker_dir or present in compiled Excel)
+        valid_years = []
+        for y in years_to_process:
+            y_dir = os.path.join(ticker_dir, str(y))
+            if os.path.exists(y_dir) or str(y) in df_bs.columns or str(y) in df_is.columns:
+                valid_years.append(y)
+
+        if not valid_years:
+            valid_years = years_to_process
+
         # 3. Normalize each year (Primary: XBRL instance, Fallback: Excel waterfall)
         normalizer = FinancialNormalizer(target_scale="millions")
         is_dict = {}
         bs_dict = {}
         cf_dict = {}
 
-        years_to_process = list(range(start_year, end_year + 1))
-        print(f"[+] Normalizing statements across {len(years_to_process)} years (Primary: XBRL, Fallback: Excel)...")
+        print(f"[+] Normalizing statements across {len(valid_years)} year(s) (Primary: XBRL, Fallback: Excel)...")
 
-        for yr in years_to_process:
+        for yr in valid_years:
             year_dir = os.path.join(ticker_dir, str(yr))
             zip_candidates = [
                 os.path.join(year_dir, "instance.zip"),
@@ -237,19 +282,19 @@ class IDXFinancialScraper:
 
         # 4. Compute operational drivers
         print("[+] Calculating historical forecasting drivers (DSO, DIO, DPO, margins, Capex)...")
-        drivers_by_year = DriverCalculator.calculate_drivers(years_to_process, is_dict, bs_dict, cf_dict)
+        drivers_by_year = DriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
         benchmarks = DriverCalculator.build_summary_benchmarks(drivers_by_year)
 
         # 5. Export 5-tab ready-to-forecast workbook
         ticker_dir = os.path.join(self.output_dir, ticker)
-        output_name = f"{ticker}_ReadyToForecast_Financials_{start_year}_{end_year}.xlsx"
+        output_name = f"{ticker}_ReadyToForecast_Financials_{year_slug}.xlsx"
         output_path = os.path.join(ticker_dir, output_name)
 
         print(f"[+] Exporting Ready-to-Forecast Excel model: {output_name}...")
         ReadyToForecastExporter.export(
             dest_path=output_path,
             ticker=ticker,
-            years=years_to_process,
+            years=valid_years,
             is_dict=is_dict,
             bs_dict=bs_dict,
             cf_dict=cf_dict,
@@ -263,7 +308,7 @@ class IDXFinancialScraper:
             "ticker": ticker,
             "status": "success",
             "ready_excel": output_path,
-            "years": years_to_process,
+            "years": valid_years,
             "is_dict": is_dict,
             "bs_dict": bs_dict,
             "cf_dict": cf_dict,

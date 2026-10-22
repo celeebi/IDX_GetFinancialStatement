@@ -19,6 +19,7 @@ if hasattr(sys.stderr, "reconfigure"):
 from idx_scraper.client import IDXClient
 from idx_scraper.api import IDXApi
 from idx_scraper.scraper import IDXFinancialScraper
+from idx_scraper.year_utils import parse_year_input, format_year_range_label
 
 
 def print_banner():
@@ -101,6 +102,8 @@ def display_ready_to_forecast_summary(res: dict):
         ("Dividend Payout Ratio (%)", True, False),
     ]
 
+    n_years = len(years)
+
     for k, is_pct, is_days in drv_keys:
         row = [k]
         for y in years:
@@ -110,15 +113,26 @@ def display_ready_to_forecast_summary(res: dict):
             else:
                 row.append("-")
 
-        # 3-Year Median & 5-Year Average benchmarks
-        med = benchmarks.get("3_Year_Median", {}).get(k)
-        avg = benchmarks.get("5_Year_Average", {}).get(k)
-        row.append(f"{med * 100:.1f}%" if (is_pct and med is not None) else (f"{med:.1f}" if (is_days and med is not None) else "-"))
-        row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+        # Benchmarks based on length
+        if n_years >= 3:
+            med = benchmarks.get("3_Year_Median", {}).get(k)
+            avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+            row.append(f"{med * 100:.1f}%" if (is_pct and med is not None) else (f"{med:.1f}" if (is_days and med is not None) else "-"))
+            row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+        elif n_years == 2:
+            avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+            row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+        
         drv_rows.append(row)
 
     print("\n[HISTORICAL OPERATIONAL DRIVERS & RATIOS]")
-    headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "5-Yr Average"]
+    if n_years >= 3:
+        headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
+    elif n_years == 2:
+        headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+    else:
+        headers_drv = ["Driver / Ratio", str(years[0])]
+
     print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
 
 
@@ -160,20 +174,23 @@ def run_interactive():
         choice = input("Choice [1/2, default: 1]: ").strip()
         is_ready_model = (choice != "2")
 
-        # Ask years
-        start_year_str = input("Start year [default 2020]: ").strip()
-        start_year = int(start_year_str) if start_year_str.isdigit() else 2020
+        # Ask years with smart flexible syntax
+        year_prompt = input("\nEnter Year or Range (e.g. 2023, 2020-2023, 2018-2024, or 'all') [default: 2020-2024]: ").strip()
+        parsed_years = parse_year_input(year_prompt)
 
-        end_year_str = input("End year [default 2024]: ").strip()
-        end_year = int(end_year_str) if end_year_str.isdigit() else 2024
+        if parsed_years == ["ALL"]:
+            years_to_use = api.get_available_filing_years(ticker)
+        elif parsed_years is not None:
+            years_to_use = parsed_years
+        else:
+            years_to_use = [2020, 2021, 2022, 2023, 2024]
 
-        scraper = IDXFinancialScraper(output_dir="downloads")
+        scraper = IDXFinancialScraper(output_dir="downloads", client=api.client)
 
         if is_ready_model:
             res = scraper.build_ready_to_forecast(
                 ticker=ticker,
-                start_year=start_year,
-                end_year=end_year
+                years=years_to_use
             )
             if res.get("status") == "success":
                 display_ready_to_forecast_summary(res)
@@ -181,8 +198,7 @@ def run_interactive():
         else:
             res = scraper.scrape_ticker(
                 ticker=ticker,
-                start_year=start_year,
-                end_year=end_year,
+                years=years_to_use,
                 period="audit",
                 parse_and_export=True
             )
@@ -193,8 +209,11 @@ def run_interactive():
 def main():
     parser = argparse.ArgumentParser(description="IDX Financial Statement Scraper & Ready-to-Forecast Engine")
     parser.add_argument("-t", "--ticker", type=str, help="Stock ticker code (e.g., TLKM, BBCA, ASII)")
-    parser.add_argument("--start-year", type=int, default=2020, help="Start year (default: 2020)")
-    parser.add_argument("--end-year", type=int, default=2024, help="End year (default: 2024)")
+    parser.add_argument("-y", "--year", type=int, help="Extract a single specific year (e.g. 2023)")
+    parser.add_argument("--years", type=str, help="Year specification: single (2023), range (2020-2023), list (2020,2022,2024), or 'all'")
+    parser.add_argument("--all", action="store_true", help="Probe and extract all available historical filing years on IDX")
+    parser.add_argument("--start-year", type=int, default=None, help="Start year (optional)")
+    parser.add_argument("--end-year", type=int, default=None, help="End year (optional)")
     parser.add_argument("-p", "--period", type=str, default="audit", choices=["audit", "tw1", "tw2", "tw3"], help="Period (default: audit)")
     parser.add_argument("-o", "--output-dir", type=str, default="downloads", help="Directory to save downloads")
     parser.add_argument("--ready-to-forecast", "--proforma", action="store_true", help="Generate clean 5-tab ready-to-forecast model")
@@ -221,13 +240,37 @@ def main():
 
     if args.ticker:
         print_banner()
-        scraper = IDXFinancialScraper(output_dir=args.output_dir)
+        api = IDXApi()
+        scraper = IDXFinancialScraper(output_dir=args.output_dir, client=api.client)
+
+        # Resolve requested years
+        years_to_use = None
+        if args.all:
+            years_to_use = api.get_available_filing_years(args.ticker)
+        elif args.year:
+            years_to_use = [args.year]
+        elif args.years:
+            parsed = parse_year_input(args.years)
+            if parsed == ["ALL"]:
+                years_to_use = api.get_available_filing_years(args.ticker)
+            elif parsed:
+                years_to_use = parsed
+        elif args.start_year is not None and args.end_year is not None:
+            years_to_use = list(range(min(args.start_year, args.end_year), max(args.start_year, args.end_year) + 1))
+        elif args.start_year is not None:
+            years_to_use = [args.start_year]
+        else:
+            # Default to standard 5 years if no year arguments specified
+            years_to_use = [2020, 2021, 2022, 2023, 2024]
+
+        if not years_to_use:
+            print(f"[-] No valid years could be resolved for {args.ticker}.")
+            return
 
         if args.ready_to_forecast:
             res = scraper.build_ready_to_forecast(
                 ticker=args.ticker,
-                start_year=args.start_year,
-                end_year=args.end_year
+                years=years_to_use
             )
             if res.get("status") == "success":
                 display_ready_to_forecast_summary(res)
@@ -235,8 +278,7 @@ def main():
         else:
             res = scraper.scrape_ticker(
                 ticker=args.ticker,
-                start_year=args.start_year,
-                end_year=args.end_year,
+                years=years_to_use,
                 period=args.period,
                 parse_and_export=True
             )

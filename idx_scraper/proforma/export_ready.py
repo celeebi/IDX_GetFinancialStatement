@@ -67,13 +67,17 @@ class ReadyToForecastExporter:
         sorted_years = sorted(years)
         benchmarks = DriverCalculator.build_summary_benchmarks(drivers_by_year)
 
+        n_years = len(sorted_years)
+        time_desc = "Annual Financial Statement" if n_years == 1 else f"{n_years}-Year Historical Statements"
+        stmt_subtitle = f"Normalized {time_desc} (Amounts in Millions IDR / Juta Rupiah)"
+
         # 1. Income Statement Tab
         ws_is = wb.active
         ws_is.title = "Historical_IS"
         cls._build_statement_sheet(
             ws=ws_is,
             title=f"{ticker.upper()} - CONSOLIDATED INCOME STATEMENT",
-            subtitle="Normalized 5-Year Historicals (Amounts in Millions IDR / Juta Rupiah)",
+            subtitle=stmt_subtitle,
             years=sorted_years,
             data_dict={y: is_dict[y].to_dict() for y in sorted_years},
             bold_items=[
@@ -88,7 +92,7 @@ class ReadyToForecastExporter:
         cls._build_statement_sheet(
             ws=ws_bs,
             title=f"{ticker.upper()} - CONSOLIDATED BALANCE SHEET",
-            subtitle="Normalized 5-Year Historicals (Amounts in Millions IDR / Juta Rupiah)",
+            subtitle=stmt_subtitle,
             years=sorted_years,
             data_dict={y: bs_dict[y].to_dict() for y in sorted_years},
             bold_items=[
@@ -104,7 +108,7 @@ class ReadyToForecastExporter:
         cls._build_statement_sheet(
             ws=ws_cf,
             title=f"{ticker.upper()} - CONSOLIDATED CASH FLOW STATEMENT",
-            subtitle="Normalized 5-Year Historicals (Amounts in Millions IDR / Juta Rupiah)",
+            subtitle=stmt_subtitle,
             years=sorted_years,
             data_dict={y: cf_dict[y].to_dict() for y in sorted_years},
             bold_items=[
@@ -230,7 +234,19 @@ class ReadyToForecastExporter:
 
         # Header Row
         header_row = 4
-        headers = ["Operational Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "5-Yr Average"]
+        n_years = len(years)
+
+        if n_years == 1:
+            benchmark_cols = []
+        elif n_years == 2:
+            benchmark_cols = [("Historical Average", "Historical_Average", cls.ACCENT_FILL)]
+        else:
+            benchmark_cols = [
+                ("3-Yr Median", "3_Year_Median", cls.HIGHLIGHT_FILL),
+                ("Historical Average", "Historical_Average", cls.ACCENT_FILL)
+            ]
+
+        headers = ["Operational Driver / Ratio"] + [str(y) for y in years] + [b[0] for b in benchmark_cols]
 
         for col_idx, h_text in enumerate(headers, start=1):
             c = ws.cell(row=header_row, column=col_idx, value=h_text)
@@ -266,26 +282,17 @@ class ReadyToForecastExporter:
                     else:
                         c.number_format = "0.00"
 
-            # Benchmark columns
-            med_val = benchmarks.get("3_Year_Median", {}).get(k)
-            avg_val = benchmarks.get("5_Year_Average", {}).get(k)
+            # Benchmark columns (if any)
+            for b_idx, (b_title, b_key, b_fill) in enumerate(benchmark_cols):
+                b_val = benchmarks.get(b_key, {}).get(k)
+                bench_cell = ws.cell(row=current_row, column=len(years) + 2 + b_idx, value=b_val if b_val is not None else "")
+                bench_cell.font = cls.FONT_BOLD if "Median" in b_title else cls.FONT_NORMAL
+                bench_cell.fill = b_fill
+                bench_cell.border = cls.BORDER_THIN
+                bench_cell.alignment = Alignment(horizontal="right")
 
-            med_cell = ws.cell(row=current_row, column=len(years) + 2, value=med_val if med_val is not None else "")
-            med_cell.font = cls.FONT_BOLD
-            med_cell.fill = cls.HIGHLIGHT_FILL
-            med_cell.border = cls.BORDER_THIN
-            med_cell.alignment = Alignment(horizontal="right")
-
-            avg_cell = ws.cell(row=current_row, column=len(years) + 3, value=avg_val if avg_val is not None else "")
-            avg_cell.font = cls.FONT_NORMAL
-            avg_cell.fill = cls.ACCENT_FILL
-            avg_cell.border = cls.BORDER_THIN
-            avg_cell.alignment = Alignment(horizontal="right")
-
-            if med_val is not None:
-                med_cell.number_format = "0.0%" if is_pct else ("0.0" if is_days else "0.00")
-            if avg_val is not None:
-                avg_cell.number_format = "0.0%" if is_pct else ("0.0" if is_days else "0.00")
+                if b_val is not None:
+                    bench_cell.number_format = "0.0%" if is_pct else ("0.0" if is_days else "0.00")
 
             current_row += 1
 

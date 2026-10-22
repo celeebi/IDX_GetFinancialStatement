@@ -101,18 +101,28 @@ class IDXApi:
     def get_filing_history(
         self,
         kode_emiten: str,
-        start_year: int,
-        end_year: int,
-        period: str = "audit"
+        start_year: Optional[int] = None,
+        end_year: Optional[int] = None,
+        period: str = "audit",
+        years: Optional[List[int]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Query filing history for a specific ticker over a multi-year range.
-        Returns a list of records containing report metadata and standardized Excel attachment details.
+        Query filing history for a specific ticker over a single year, a range, or an arbitrary list of years.
+        Returns a list of records containing report metadata, standardized Excel attachment details, and XBRL zip details.
         """
         ticker = kode_emiten.strip().upper()
         history = []
 
-        for year in range(start_year, end_year + 1):
+        if years is not None:
+            years_to_query = sorted(list(set(years)))
+        elif start_year is not None and end_year is not None:
+            years_to_query = list(range(min(start_year, end_year), max(start_year, end_year) + 1))
+        elif start_year is not None:
+            years_to_query = [start_year]
+        else:
+            years_to_query = [2020, 2021, 2022, 2023, 2024]
+
+        for year in years_to_query:
             try:
                 data = self.get_financial_reports(year=year, period=period, kode_emiten=ticker, page=1, page_size=5)
                 results = data.get("Results", [])
@@ -144,3 +154,8 @@ class IDXApi:
                 logger.error(f"Error querying {ticker} year {year}: {e}")
 
         return history
+
+    def get_available_filing_years(self, ticker: str, min_year: int = 2015, max_year: Optional[int] = None) -> List[int]:
+        """Discover all published annual filing years for a ticker on IDX."""
+        from .year_utils import probe_available_filing_years
+        return probe_available_filing_years(self, ticker, min_year=min_year, max_year=max_year)

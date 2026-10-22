@@ -146,24 +146,36 @@ Project_scrapping/
 ## Usage Guide
 
 ### 1. Ready-to-Forecast Financial Model (Recommended)
-Extracts 5 years of historical statements, computes operational drivers, and exports a 5-tab Excel workbook:
+Extracts financial statements for any time horizon, computes operational drivers, and exports a 5-tab Excel workbook:
 
 ```bash
-# Astra International (Conglomerate)
-python main.py --ticker ASII --start-year 2020 --end-year 2024 --ready-to-forecast
+# 1. Single Year Extraction (e.g. 2023 only)
+python main.py --ticker ASII --year 2023 --ready-to-forecast
 
-# Telkom Indonesia (Telecom / Infrastructure)
-python main.py --ticker TLKM --start-year 2020 --end-year 2024 --ready-to-forecast
+# 2. Custom Sub-Range (e.g. 3 years: 2021-2023)
+python main.py --ticker TLKM --years 2021-2023 --ready-to-forecast
 
-# Bank Central Asia (Banking / Sharia Window)
-python main.py --ticker BBCA --start-year 2020 --end-year 2024 --ready-to-forecast
+# 3. Disjoint / Non-Contiguous Selection (e.g. alternate years)
+python main.py --ticker ASII --years 2020,2022,2024 --ready-to-forecast
+
+# 4. All Available Historical Data (Automatic Discovery on IDX)
+python main.py --ticker BBCA --all --ready-to-forecast
+
+# 5. Standard 5-Year Horizon (2020-2024)
+python main.py --ticker BBCA --years 2020-2024 --ready-to-forecast
 ```
 
 ### 2. Interactive Terminal Mode
-Run without arguments to launch the interactive prompt:
+Run without arguments to launch the interactive prompt with smart year parsing:
 ```bash
 python main.py
 ```
+At the prompt, you can enter any year expression:
+- `2023` $\to$ pulls only 2023
+- `2020-2023` $\to$ pulls 2020 through 2023
+- `2019, 2021, 2023` $\to$ pulls specific years
+- `all` $\to$ auto-probes and extracts all published years
+- Pressing `Enter` $\to$ defaults to standard `2020-2024`
 
 ### 3. Search Listed Companies
 Find tickers or verify company names across 960+ listed companies on IDX:
