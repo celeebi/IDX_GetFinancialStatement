@@ -1,131 +1,154 @@
-# IDX Financial Statement Scraper & Ready-to-Forecast Pro Forma Data Engine
+# IDX Financial Statement Scraper & Ready-to-Forecast Modeling Engine
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
 
-An automated, high-fidelity financial statement scraper, taxonomy normalizer, and operational driver engine for **PT Bursa Efek Indonesia (Indonesia Stock Exchange / IDX - `idx.co.id`)**.
+An automated financial statement scraper, sector-aware normalizer, and operational driver engine for **PT Bursa Efek Indonesia (Indonesia Stock Exchange / IDX - `idx.co.id`)**.
 
-It scrapes **5+ historical years (e.g. 2020–2024+)** of audited annual filings, overcomes Cloudflare Turnstile anti-bot protections, resolves complex Indonesian accounting taxonomies across different sectors, and exports an unspeculative, modeling-ready 5-tab Excel spreadsheet normalized to **Millions IDR (Juta Rupiah)** with a mathematically balanced Balance Sheet ($\text{Assets} = \text{Liabilities} + \text{Equity}$).
-
----
-
-## Dual-Archetype Architecture & Sector Handling
-
-The Indonesia Stock Exchange organizes filings into **8 industry-specific entry points**. Standard corporate pro forma metrics (such as DSO, DIO, DPO, and Capex % Rev) mathematically break down when applied to banks and financial institutions (where loans are assets and customer deposits are liabilities).
-
-To handle this, our pipeline automatically identifies the entity's sector and dispatches one of two **Macro Financial Modeling Archetypes**:
-
-```
-                              ┌────────────────────────────────────────┐
-                              │     IDX Financial Statement Filing     │
-                              └───────────────────┬────────────────────┘
-                                                  │
-                                                  ▼
-                               ┌──────────────────────────────────────┐
-                               │ Sector & Entry Point Auto-Detection  │
-                               │ (Metadata, Sheet Prefixes, Taxonomy) │
-                               └──────────────────┬───────────────────┘
-                                                  │
-                   ┌──────────────────────────────┴──────────────────────────────┐
-                   ▼                                                             ▼
- ┌───────────────────────────────────┐                         ┌───────────────────────────────────┐
- │   ARCHETYPE A: CORPORATE MODEL    │                         │  ARCHETYPE B: FINANCIAL / BANKING │
- ├───────────────────────────────────┤                         ├───────────────────────────────────┤
- │ • Entry Point 1: General Industry │                         │ • Entry Point 4: Banks & Sharia   │
- │ • Entry Point 2: Property         │                         │ • Entry Point 5: Multifinance     │
- │ • Entry Point 3: Infrastructure   │                         │ • Entry Point 6: Insurance        │
- ├───────────────────────────────────┤                         ├───────────────────────────────────┤
- │ Key Accounts:                     │                         │ Key Accounts:                     │
- │ • Gross Revenue & COGS            │                         │ • Interest Income & Expense (NII) │
- │ • Operating Profit / EBITDA       │                         │ • Customer Deposits (DPK)         │
- │ • Trade Working Capital (AR, Inv) │                         │ • Gross Loans & Impairment (CKPN) │
- │ • Capex & PP&E Roll-forward       │                         │ • Earning Assets & Placements     │
- ├───────────────────────────────────┤                         ├───────────────────────────────────┤
- │ Drivers & Ratios:                 │                         │ Drivers & Ratios:                 │
- │ • Revenue Growth, Gross Margin %  │                         │ • Net Interest Margin (NIM %)     │
- │ • Working Capital Days (DSO, DIO) │                         │ • Cost of Funds (CoF %)           │
- │ • Capex % of Revenue              │                         │ • Loan-to-Deposit Ratio (LDR %)   │
- │ • Debt / EBITDA, Interest Cover   │                         │ • CASA Ratio (%)                  │
- └───────────────────────────────────┘                         │ • Cost-to-Income (BOPO / CIR %)   │
-                                                               │ • Credit Cost / Provision Rate    │
-                                                               │ • Return on Assets (ROA %) & ROE  │
-                                                               └───────────────────────────────────┘
-```
+Built specifically for **equity research analysts, finance students, and investment modelers**, this tool eliminates hours of manual data entry from messy IDX filings and instantly delivers clean, standardized 3-statement financials and forecasting drivers.
 
 ---
 
-## Architecture Overview
+## Why Use This Tool?
 
+Building 3-statement financial models, DCF valuations, or equity research notes for Indonesian companies is traditionally painful:
+- IDX publishes filings in inconsistent formats across different years.
+- Excel layouts shift, line items disappear into disaggregated notes, and numbers are reported in varying units (Rupiah, Thousands, Millions, Billions).
+- Financial institutions (banks, insurance, multifinance) follow completely different accounting structures than general corporates.
+
+**This engine solves all of that in a single command.** Enter a stock ticker (e.g., `ASII`, `BBCA`, `TLKM`) and get an instant, normalized 3-statement financial model with pre-calculated operational drivers—both in your terminal and exported to a presentation-ready 5-tab Excel spreadsheet.
+
+---
+
+## Key Features for Financial Analysts
+
+### 1. Instant 3 Financial Statements
+Pulls and standardizes the complete financial triad:
+- **Consolidated Income Statement**
+- **Consolidated Balance Sheet**
+- **Consolidated Cash Flow Statement**
+
+All figures are automatically detected, normalized, and scaled to **Millions IDR (Juta Rupiah)** for clean, readable analysis.
+
+### 2. Sector-Aware Modeling (Corporate vs. Banking)
+Traditional corporate models (which focus on COGS, Gross Profit, and inventory turns) mathematically break down for financial institutions. The engine automatically detects the company's sector from filing metadata and applies the appropriate financial framework:
+
+| Financial Dimension | Non-Financial Corporates (ASII, TLKM, ICBP, UNTR) | Financial Institutions & Banks (BBCA, BBRI, BMRI, BFIN) |
+| :--- | :--- | :--- |
+| **Primary Revenue** | Gross Sales & Revenue | Net Interest Income (NII) & Fee Income |
+| **Cost Structure** | Cost of Goods Sold (COGS) & Operating Expenses | Interest Expense & Cost of Funds (CoF) |
+| **Profitability Metrics**| Gross Profit, EBITDA, Operating Profit (EBIT) | Pre-Provision Operating Profit (PPOP), Net Income |
+| **Operating Assets** | Trade Receivables, Inventories, Net PP&E | Earning Assets, Placements with BI, Gross & Net Loans |
+| **Operating Liabilities**| Trade Payables, Short & Long-Term Debt | Customer Deposits (DPK: Giro, Tabungan, Deposito) |
+| **Working Capital** | Working Capital Days (DSO, DIO, DPO) | Loan-to-Deposit Ratio (LDR), CASA Ratio (%) |
+| **Risk & Quality** | Debt-to-EBITDA, Interest Coverage | Credit Cost / Provisioning Rate (CKPN %), CIR / BOPO |
+
+### 3. Guaranteed Balance Sheet Integrity ($\Delta = \mathbf{0.00}$)
+Never worry about out-of-balance models:
+$$\text{Total Assets} - (\text{Total Liabilities} + \text{Total Equity}) == \mathbf{0.00}$$
+For conventional banks with Islamic banking windows (e.g., BBCA, BMRI), `Dana Syirkah Temporer` is automatically reconciled, ensuring perfect accounting balance across all years.
+
+### 4. Ready-to-Forecast Operational Drivers
+To jumpstart your pro forma projections and DCF valuation without guesswork, the engine computes historical operational drivers for every period:
+- **Corporate Drivers**: Revenue Growth (YoY), Gross Margin %, SG&A % Rev, Operating Margin %, Days Sales Outstanding (DSO), Days Inventory Outstanding (DIO), Days Payable Outstanding (DPO), Capex % of Revenue, D&A % of Net PP&E, Dividend Payout Ratio.
+- **Banking Drivers**: Loan Growth (YoY), Deposit Growth (YoY), Net Interest Margin (NIM %), Cost of Funds (CoF %), Loan-to-Deposit Ratio (LDR %), CASA Ratio (%), Cost-to-Income / BOPO (CIR %), Credit Cost / Provisioning Rate (%), ROA %, ROE %, Equity-to-Assets %.
+- **Statistical Baselines**: Automatically computes **3-Year Medians** and **Historical Averages** to serve as baseline inputs for your forecast assumptions.
+
+### 5. Flexible Historical Horizons
+Analyze whatever historical period your valuation requires:
+- **Single Year**: Pull just 2023 (`--year 2023`).
+- **Sub-Range**: Pull a 3-year period (`--years 2021-2023`).
+- **Disjoint Selection**: Pull alternate or specific years (`--years 2018,2021,2024`).
+- **Full Historical Archive**: Probe and extract every online filing published on IDX (`--all`).
+- **Standard 5-Year Horizon**: Default 5-year analysis (`2020-2024`).
+
+### 6. Professional 5-Tab Excel Financial Model
+Generates a formatted workbook styled for financial presentation:
+- `Historical_IS`: Consolidated Income Statement.
+- `Historical_BS`: Consolidated Balance Sheet with balance check validation.
+- `Historical_CF`: Consolidated Cash Flow Statement (Operating, Investing, Financing).
+- `Forecasting_Drivers`: Historical ratios, working capital metrics, 3-Yr Medians & Averages.
+- `General_Info`: Company profile, sector, presentation currency, and auditor opinions.
+
+---
+
+## Quick Start Guide
+
+### 1. Installation
+Clone the repository and install dependencies:
+```bash
+git clone https://github.com/celeebi/IDX_GetFinancialStatement.git
+cd IDX_GetFinancialStatement
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+# Linux / macOS:
+source .venv/bin/activate
+
+# Install requirements
+pip install -r requirements.txt
 ```
-                      ┌───────────────────────────────────────────────┐
-                      │             IDX Primary REST API              │
-                      │     /primary/ListedCompany/GetFinancialReport │
-                      └───────────────────────┬───────────────────────┘
-                                              │
-                      ┌───────────────────────┴───────────────────────┐
-                      ▼                                               ▼
-         ┌─────────────────────────┐                     ┌─────────────────────────┐
-         │ Standardized Excel File │                     │    XBRL Instance Zip    │
-         │ FinancialStatement.xlsx │                     │       instance.zip      │
-         └────────────┬────────────┘                     └────────────┬────────────┘
-                      │                                               │
-                      ▼                                               ▼
-         ┌─────────────────────────┐                     ┌─────────────────────────┐
-         │ 4-Tier Waterfall Parser │                     │    XBRL Direct Parser   │
-         │   (excel_parser.py)     │                     │     (xbrl_parser.py)    │
-         └────────────┬────────────┘                     └────────────┬────────────┘
-                      │                                               │
-                      └───────────────────────┬───────────────────────┘
-                                              ▼
-                              ┌───────────────────────────────┐
-                              │   FinancialNormalizer Engine  │
-                              │ • Scale to Millions IDR       │
-                              │ • Mathematical Balance Check  │
-                              │ • Dana Syirkah Temporer       │
-                              └───────────────┬───────────────┘
-                                              ▼
-                              ┌───────────────────────────────┐
-                              │    DriverCalculator Engine    │
-                              │ • DSO, DIO, DPO Days          │
-                              │ • Gross, Opex, Net Margins    │
-                              │ • Capex % Rev, D&A % PP&E     │
-                              │ • 3-Yr Median & 5-Yr Average  │
-                              └───────────────┬───────────────┘
-                                              ▼
-                              ┌───────────────────────────────┐
-                              │    5-Tab Ready-to-Forecast    │
-                              │     Excel Model (.xlsx)       │
-                              └───────────────────────────────┘
+
+### 2. Run Interactive Mode
+Run the tool without arguments for a guided prompt:
+```bash
+python main.py
+```
+Simply enter a stock ticker (e.g. `BBCA`, `ASII`, `TLKM`) and your desired year horizon (e.g. `2020-2024`, `2023`, or `all`).
+
+---
+
+## Practical CLI Usage Examples
+
+### 1. Ready-to-Forecast Model (Recommended)
+Generate the complete 3-statement model and forecasting drivers:
+
+```bash
+# Analyze Bank Central Asia (BBCA) over a 5-year horizon (2020-2024)
+python main.py --ticker BBCA --years 2020-2024 --ready-to-forecast
+
+# Analyze Astra International (ASII) for a 3-year sub-range
+python main.py --ticker ASII --years 2021-2023 --ready-to-forecast
+
+# Analyze Telkom Indonesia (TLKM) for a single specific year
+python main.py --ticker TLKM --year 2023 --ready-to-forecast
+
+# Pull all available historical years published on IDX
+python main.py --ticker BBCA --all --ready-to-forecast
+```
+
+### 2. Search Listed Companies
+Find tickers or verify company names across 960+ listed companies on IDX:
+```bash
+python main.py --search "bank"
+python main.py --search "telekomunikasi"
+python main.py --search "astra"
+```
+
+### 3. Raw Table Compilation Only
+If you only need raw multi-year tables without normalization:
+```bash
+python main.py --ticker BBRI --years 2021-2023
 ```
 
 ---
 
-## Key Features & Accounting Problem Solved
+## 5-Tab Excel Workbook Layout
 
-### 1. Cloudflare Turnstile / Managed Challenge Bypass
-Standard scrapers (`requests`, `urllib`, `aiohttp`) trigger HTTP 403 Forbidden due to Cloudflare Turnstile bot detection on IDX's portal. This tool utilizes `curl_cffi` with browser TLS fingerprinting (JA3) and HTTP/2 spoofing (`impersonate="chrome131"`), achieving seamless HTTP 200 responses.
+When running `--ready-to-forecast`, the output file `{TICKER}_ReadyToForecast_Financials_{YEARS}.xlsx` contains:
 
-### 2. Dual-Source Ingestion Architecture
-- **Primary Engine (`XBRLParser`)**: Ingests the official raw XBRL instance (`instance.xbrl` inside `instance.zip`). Elements carry canonical taxonomy concepts (e.g., `SalesAndRevenue`, `TradeReceivablesNet`, `Assets`) regardless of Excel spacing or UI language toggles, and report in Full IDR (eliminating multi-year scale discrepancies).
-- **Fallback Engine (`FinancialNormalizer`)**: A robust 4-tier waterfall parser that inspects multi-taxonomy Excel sheets (`1210000`, `1321000`, `3210000`, `4220000`), resolving parent summary rows, child account aggregations, and rounding metadata.
-
-### 3. Conglomerate Disaggregation Fix (e.g. ASII)
-In conglomerates like Astra International (ASII), Excel summary rows for Revenue were left blank due to segment disaggregation. Direct XBRL ingestion accesses the unfragmented macro tag `<idx-cor:SalesAndRevenue contextRef="CurrentYearDuration">`, capturing full revenue across all 5 years without gaps.
-
-### 4. Sharia Windows & Islamic Banking (`Dana Syirkah Temporer`)
-Conventional banks with Sharia windows (BBCA, BMRI) report `Dana Syirkah Temporer` between Liabilities and Equity ($Assets = Liabilities + Syirkah + Equity$). Syirkah funds are automatically consolidated into Total Liabilities, guaranteeing that:
-$$\text{Balance Check} = \text{Total Assets} - (\text{Total Liabilities} + \text{Total Equity}) == \mathbf{0.00}$$
-
-### 5. Infrastructure & Telecom By-Nature Accounting (e.g. TLKM)
-Companies that report expenses by nature (interconnection, network operations, personnel) rather than by function do not break out COGS. The engine dynamically computes Operating Income (EBIT) and EBITDA from nature-based operating expenses and D&A.
-
-### 6. Historical Operational Driver Computation
-To build your own pro forma model without speculative projections, the tool computes standard operational drivers for every historical year, including:
-- **Working Capital Efficiency**: Days Sales Outstanding (DSO), Days Inventory Outstanding (DIO), Days Payable Outstanding (DPO).
-- **Profitability Margins**: Gross Margin, SG&A / Opex % Rev, EBITDA Margin, Operating Margin, Net Margin, Effective Tax Rate.
-- **Fixed Capital & Dividends**: Capex % of Revenue, D&A % of Net PP&E, Dividend Payout Ratio.
-- **Statistical Benchmarks**: **3-Year Medians** and **5-Year Averages** for baseline forecasting inputs.
+| Tab Name | Contents & Purpose |
+| :--- | :--- |
+| **`Historical_IS`** | Clean multi-year Income Statement with bold subtotals (Gross Profit, EBITDA, EBIT, EBT, Net Income for Corporates; NII, Fee Income, Opex, PPOP, Net Income for Banks). |
+| **`Historical_BS`** | Standardized Balance Sheet with an automated **Balance Check ($Assets - Liab - Eq = 0.00$)** highlighted in green. |
+| **`Historical_CF`** | Cash Flow Statement: Operating Cash Flow (CFO), Capital Expenditures / Investing (CFI), Dividends Paid, Financing (CFF), and Ending Cash. |
+| **`Forecasting_Drivers`** | Pre-calculated operational modeling drivers, margins, working capital efficiency days, and **3-Year Medians & Historical Averages**. |
+| **`General_Info`** | Corporate metadata, sector classification, auditor name, and presentation currency. |
 
 ---
 
@@ -133,168 +156,40 @@ To build your own pro forma model without speculative projections, the tool comp
 
 ```
 Project_scrapping/
+├── main.py                                  # CLI and Interactive Entry Point
 ├── requirements.txt
 ├── README.md
-├── main.py                                  # CLI and Interactive Entry Point
 ├── idx_scraper/
-│   ├── __init__.py
-│   ├── client.py                            # TLS-spoofed HTTP Client with rate-limiting
+│   ├── client.py                            # Rate-limited HTTP client with TLS fingerprinting
 │   ├── api.py                               # Typed IDX REST API Endpoints
+│   ├── scraper.py                           # High-level pipeline coordinator
+│   ├── year_utils.py                        # Flexible year range parsing engine
 │   ├── excel_parser.py                      # Multi-taxonomy sheet finder & Excel parser
 │   ├── xbrl_parser.py                       # Canonical XBRL instance document parser
 │   ├── multi_year.py                        # Multi-year table compiler
-│   ├── scraper.py                           # High-level pipeline coordinator
 │   └── proforma/
-│       ├── __init__.py
-│       ├── schema.py                        # Dataclasses (Corporate & Banking IS, BS, CF, Drivers)
-│       ├── dispatcher.py                    # Sector & Archetype auto-detection engine
-│       ├── normalizer.py                    # Waterfall resolution engine (Corporate & Banking)
-│       ├── drivers.py                       # Operational drivers & benchmark statistics
-│       └── export_ready.py                  # 5-tab Excel workbook exporter
+│       ├── dispatcher.py                    # Sector & Archetype auto-detection
+│       ├── schema.py                        # Corporate & Banking COA dataclasses
+│       ├── normalizer.py                    # Multi-tier waterfall normalization engine
+│       ├── drivers.py                       # Operational driver & benchmark calculator
+│       └── export_ready.py                  # 5-tab ready-to-forecast Excel builder
 └── downloads/
     └── {TICKER}/
         ├── {YEAR}/
         │   ├── FinancialStatement-{YEAR}-Tahunan-{TICKER}.xlsx
         │   └── instance.zip
-        ├── {TICKER}_financial_statements_{START}_{END}.xlsx       (Raw compiled tables)
-        └── {TICKER}_ReadyToForecast_Financials_{START}_{END}.xlsx (5-Tab Ready-to-Forecast Model)
+        ├── {TICKER}_financial_statements_{YEARS}.xlsx       (Raw compiled tables)
+        └── {TICKER}_ReadyToForecast_Financials_{YEARS}.xlsx (5-Tab Ready-to-Forecast Model)
 ```
 
 ---
 
-## Installation & Setup
+## Under the Hood
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/celeebi/IDX_GetFinancialStatement.git
-   cd IDX_GetFinancialStatement
-   ```
-
-2. **Create and activate a virtual environment**:
-   - **Windows (PowerShell)**:
-     ```powershell
-     python -m venv .venv
-     .\.venv\Scripts\Activate.ps1
-     ```
-   - **Linux / macOS**:
-     ```bash
-     python3 -m venv .venv
-     source .venv/bin/activate
-     ```
-
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-## Usage Guide
-
-### 1. Ready-to-Forecast Financial Model (Recommended)
-Extracts financial statements for any time horizon, computes operational drivers, and exports a 5-tab Excel workbook:
-
-```bash
-# 1. Single Year Extraction (e.g. 2023 only)
-python main.py --ticker ASII --year 2023 --ready-to-forecast
-
-# 2. Custom Sub-Range (e.g. 3 years: 2021-2023)
-python main.py --ticker TLKM --years 2021-2023 --ready-to-forecast
-
-# 3. Disjoint / Non-Contiguous Selection (e.g. alternate years)
-python main.py --ticker ASII --years 2020,2022,2024 --ready-to-forecast
-
-# 4. All Available Historical Data (Automatic Discovery on IDX)
-python main.py --ticker BBCA --all --ready-to-forecast
-
-# 5. Standard 5-Year Horizon (2020-2024)
-python main.py --ticker BBCA --years 2020-2024 --ready-to-forecast
-```
-
-### 2. Interactive Terminal Mode
-Run without arguments to launch the interactive prompt with smart year parsing:
-```bash
-python main.py
-```
-At the prompt, you can enter any year expression:
-- `2023` $\to$ pulls only 2023
-- `2020-2023` $\to$ pulls 2020 through 2023
-- `2019, 2021, 2023` $\to$ pulls specific years
-- `all` $\to$ auto-probes and extracts all published years
-- Pressing `Enter` $\to$ defaults to standard `2020-2024`
-
-### 3. Search Listed Companies
-Find tickers or verify company names across 960+ listed companies on IDX:
-```bash
-python main.py --search bank
-python main.py --search telekomunikasi
-python main.py --search "astra"
-```
-
-### 4. Raw Multi-Year Table Compilation Only
-Downloads standardized Excel filings and compiles side-by-side comparative tables without normalization:
-```bash
-python main.py --ticker BBRI --start-year 2020 --end-year 2024
-```
-
----
-
-## Verified Multi-Sector Benchmarks (2020–2024)
-
-### 1. Astra International Tbk (`ASII`) — Conglomerate
-- **Revenue (Millions IDR)**:
-  - `2020`: 175,046,000 M (175.0T)
-  - `2021`: 233,485,000 M (233.5T)
-  - `2022`: 301,379,000 M (301.4T)
-  - `2023`: 316,565,000 M (316.6T)
-  - `2024`: 330,920,000 M (330.9T)
-- **Gross Margin**: 22.0% $\to$ 21.9% $\to$ 23.3% $\to$ 23.2% $\to$ 22.2% (**3-Yr Median: 23.2%**)
-- **Working Capital Days**: DSO 32.2 days | DIO 50.5 days | DPO 59.4 days
-- **Capex (% of Revenue)**: 2.4% (2020) $\to$ 4.4% (2024) (**5-Yr Avg: 3.7%**)
-- **Balance Sheet Check**: **0.00 across all 5 years (2020–2024)**
-
-### 2. Telkom Indonesia Tbk (`TLKM`) — Telecom & Infrastructure
-- **Revenue (Millions IDR)**:
-  - `2020`: 136,462,000 M (136.5T)
-  - `2021`: 143,210,000 M (143.2T)
-  - `2022`: 147,306,000 M (147.3T)
-  - `2023`: 149,216,000 M (149.2T)
-  - `2024`: 149,967,000 M (150.0T)
-- **Operating Margin (EBIT %)**: 31.6% $\to$ 30.7% $\to$ 31.0% $\to$ 30.1% $\to$ 28.3% (**3-Yr Median: 30.1%**)
-- **Capex (% of Revenue)**: 21.7% $\to$ 20.7% $\to$ 23.9% $\to$ 22.5% $\to$ 17.3% (**5-Yr Avg: 21.2%**)
-- **D&A (% of Net PP&E)**: 18.0% $\to$ 19.3% $\to$ 19.2% $\to$ 18.1% $\to$ 15.7% (**3-Yr Median: 18.1%**)
-- **Dividend Payout Ratio**: 77.9% $\to$ 88.0% $\to$ 90.2% $\to$ 82.0% $\to$ 80.6% (**3-Yr Median: 82.0%**)
-- **Balance Sheet Check**: **0.00 across all 5 years (2020–2024)**
-
-### 3. Bank Central Asia Tbk (`BBCA`) — Banking & Sharia Window
-- **Interest & Sharia Income (Millions IDR)**:
-  - `2020`: 65,403,161 M (65.4T)
-  - `2021`: 65,626,976 M (65.6T)
-  - `2022`: 72,241,191 M (72.2T)
-  - `2023`: 87,397,774 M (87.4T)
-  - `2024`: 94,796,454 M (94.8T)
-- **Net Income**: 27.1T (2020) $\to$ 54.9T (2024)
-- **Balance Sheet (2024)**:
-  - Assets: 1,449,301,328 M
-  - Liabilities: 1,177,403,108 M
-  - Dana Syirkah Temporer: 9,063,133 M
-  - Equity: 262,835,087 M
-  - **Equation**: $1,449,301,328 - (1,177,403,108 + 9,063,133 + 262,835,087) = \mathbf{0.00}$
-- **Balance Sheet Check**: **0.00 across all 5 years (2020–2024)**
-
----
-
-## 5-Tab Excel Workbook Structure
-
-When using `--ready-to-forecast`, the output file `{TICKER}_ReadyToForecast_Financials_2020_2024.xlsx` contains:
-
-| Tab Name | Purpose & Contents |
-| :--- | :--- |
-| **`Historical_IS`** | Clean multi-year Income Statement: Revenue, COGS, Gross Profit, SG&A / Opex, EBITDA, D&A, EBIT, Net Finance, EBT, Tax, and Net Income. |
-| **`Historical_BS`** | Standardized Balance Sheet: Working Capital, Cash, PP&E, Debt, Equity, and **Balance Check ($Assets - Liab - Eq = 0.00$)**. |
-| **`Historical_CF`** | Cash Flow Statement: Operating Cash Flow (CFO), Capex (CFI), Dividends, Net Debt changes, Beginning and Ending Cash. |
-| **`Forecasting_Drivers`** | Historical operating drivers ($\text{DSO}, \text{DIO}, \text{DPO}$, Margins, Capex intensity, D&A % PP&E, Dividend Payout) + **3-Year Medians & 5-Year Averages**. |
-| **`General_Info`** | Entity metadata, sector, subsector, presentation currency, auditor opinions, and Key Audit Matters. |
+For technical contributors and developers interested in the underlying pipeline:
+- **Primary XBRL Ingestion**: The engine directly reads the raw `instance.xbrl` document from IDX's filing package. XBRL concepts carry fixed semantic tags (e.g. `SalesAndRevenue`, `TotalInterestAndShariaIncome`, `Assets`), completely bypassing Excel spacing changes, cell shifts, or UI language differences.
+- **Anti-Bot Handling**: IDX's portal uses Cloudflare Turnstile protection. Requests are executed through `curl_cffi` using browser TLS fingerprint simulation (`impersonate="chrome131"`) and automatic retry backoff, ensuring uninterrupted data extraction.
+- **Unit Normalization**: Detects filing scale metadata (`Satuan Penuh`, `Ribuan`, `Jutaan`, `Miliaran`) and converts all statements into a consistent **Millions IDR** denomination.
 
 ---
 
