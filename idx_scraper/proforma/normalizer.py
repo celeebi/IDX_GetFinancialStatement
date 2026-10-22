@@ -10,7 +10,10 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 
-from .schema import NormalizedIS, NormalizedBS, NormalizedCF
+from .schema import (
+    NormalizedIS, NormalizedBS, NormalizedCF,
+    BankingIS, BankingBS, BankingCF
+)
 
 logger = logging.getLogger("idx_scraper.proforma.normalizer")
 
@@ -147,43 +150,26 @@ class FinancialNormalizer:
             year_col=yr_str, scale=scale
         )
 
-        # Accounts Receivable (or Bank Placements / Earning Assets for Banks)
-        if is_bank:
-            bs.accounts_receivable = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[
-                    r"^giro pada bank indonesia\s*$",
-                    r"^penempatan pada bank indonesia dan bank lain\s*$"
-                ],
-                year_col=yr_str, scale=scale
-            )
-        else:
-            bs.accounts_receivable = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[r"^jumlah piutang usaha\s*$", r"^piutang usaha\s*$", r"^total trade receivables\s*$"],
-                child_patterns=[
-                    r"piutang usaha pihak ketiga",
-                    r"piutang usaha pihak berelasi",
-                    r"piutang usaha\s*-\s*pihak ketiga",
-                    r"piutang usaha\s*-\s*pihak berelasi",
-                ],
-                year_col=yr_str, scale=scale
-            )
+        # Accounts Receivable
+        bs.accounts_receivable = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^jumlah piutang usaha\s*$", r"^piutang usaha\s*$", r"^total trade receivables\s*$"],
+            child_patterns=[
+                r"piutang usaha pihak ketiga",
+                r"piutang usaha pihak berelasi",
+                r"piutang usaha\s*-\s*pihak ketiga",
+                r"piutang usaha\s*-\s*pihak berelasi",
+            ],
+            year_col=yr_str, scale=scale
+        )
 
-        # Inventories (or Kredit yang Diberikan / Loans for Banks)
-        if is_bank:
-            bs.inventories = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[r"^kredit yang diberikan\s*$", r"^loans\s*$"],
-                year_col=yr_str, scale=scale
-            )
-        else:
-            bs.inventories = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[r"^jumlah persediaan\s*$", r"^persediaan lancar\s*$", r"^persediaan\s*$", r"^inventories\s*$"],
-                child_patterns=[r"persediaan lainnya", r"persediaan bahan baku", r"persediaan barang jadi"],
-                year_col=yr_str, scale=scale
-            )
+        # Inventories
+        bs.inventories = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^jumlah persediaan\s*$", r"^persediaan lancar\s*$", r"^persediaan\s*$", r"^inventories\s*$"],
+            child_patterns=[r"persediaan lainnya", r"persediaan bahan baku", r"persediaan barang jadi"],
+            year_col=yr_str, scale=scale
+        )
 
         # Total Current Assets
         official_current_assets = self._resolve_waterfall(
@@ -228,20 +214,13 @@ class FinancialNormalizer:
 
         bs.total_assets = official_total_assets if official_total_assets > 0 else (bs.total_current_assets + bs.total_non_current_assets)
 
-        # Accounts Payable (or Simpanan Nasabah / Deposits for Banks)
-        if is_bank:
-            bs.accounts_payable = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[r"^simpanan nasabah\s*$", r"^simpanan dari nasabah\s*$", r"^deposits\s*$"],
-                year_col=yr_str, scale=scale
-            )
-        else:
-            bs.accounts_payable = self._resolve_waterfall(
-                df_bs,
-                primary_patterns=[r"^jumlah utang usaha\s*$", r"^utang usaha\s*$", r"^trade payables\s*$"],
-                child_patterns=[r"utang usaha pihak ketiga", r"utang usaha pihak berelasi"],
-                year_col=yr_str, scale=scale
-            )
+        # Accounts Payable
+        bs.accounts_payable = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^jumlah utang usaha\s*$", r"^utang usaha\s*$", r"^trade payables\s*$"],
+            child_patterns=[r"utang usaha pihak ketiga", r"utang usaha pihak berelasi"],
+            year_col=yr_str, scale=scale
+        )
 
         # Short-Term Debt
         bs.short_term_debt = self._resolve_waterfall(
@@ -349,40 +328,28 @@ class FinancialNormalizer:
         is_stmt = NormalizedIS()
 
         # Revenue
-        if is_bank:
-            is_stmt.revenue = self._resolve_waterfall(
-                df_is,
-                primary_patterns=[r"^pendapatan bunga\s*$", r"^pendapatan bunga dan syariah\s*$"],
-                year_col=yr_str, scale=scale
-            )
-            is_stmt.cogs = self._resolve_waterfall(
-                df_is,
-                primary_patterns=[r"^beban bunga\s*$", r"^beban bagi hasil syariah\s*$"],
-                year_col=yr_str, scale=scale
-            )
-        else:
-            is_stmt.revenue = self._resolve_waterfall(
-                df_is,
-                primary_patterns=[
-                    r"^penjualan dan pendapatan usaha\s*$",
-                    r"^pendapatan usaha\s*$",
-                    r"^jumlah pendapatan\s*$",
-                    r"^penjualan bersih\s*$",
-                    r"^sales and revenue\s*$"
-                ],
-                year_col=yr_str, scale=scale
-            )
-            is_stmt.cogs = self._resolve_waterfall(
-                df_is,
-                primary_patterns=[
-                    r"^beban pokok penjualan\s*$",
-                    r"^beban pokok pendapatan\s*$",
-                    r"^beban pokok penjualan dan pendapatan\s*$",
-                    r"^cost of sales and revenue\s*$"
-                ],
-                child_patterns=[r"beban operasional jaringan"],  # Telco fallback
-                year_col=yr_str, scale=scale
-            )
+        is_stmt.revenue = self._resolve_waterfall(
+            df_is,
+            primary_patterns=[
+                r"^penjualan dan pendapatan usaha\s*$",
+                r"^pendapatan usaha\s*$",
+                r"^jumlah pendapatan\s*$",
+                r"^penjualan bersih\s*$",
+                r"^sales and revenue\s*$"
+            ],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.cogs = self._resolve_waterfall(
+            df_is,
+            primary_patterns=[
+                r"^beban pokok penjualan\s*$",
+                r"^beban pokok pendapatan\s*$",
+                r"^beban pokok penjualan dan pendapatan\s*$",
+                r"^cost of sales and revenue\s*$"
+            ],
+            child_patterns=[r"beban operasional jaringan"],  # Telco fallback
+            year_col=yr_str, scale=scale
+        )
 
         # Gross Profit
         is_stmt.gross_profit = max(0.0, is_stmt.revenue - is_stmt.cogs)
@@ -543,6 +510,219 @@ class FinancialNormalizer:
 
         # Ending Cash
         cf.ending_cash = bs.cash_and_equivalents
+        cf.beginning_cash = max(0.0, cf.ending_cash - cf.net_change_in_cash)
+
+        return is_stmt, bs, cf
+
+    def normalize_banking_year(
+        self,
+        year: int,
+        df_is: pd.DataFrame,
+        df_bs: pd.DataFrame,
+        df_cf: pd.DataFrame,
+        general_info: Dict[str, str] = {}
+    ) -> Tuple[BankingIS, BankingBS, BankingCF]:
+        """
+        Normalize a single year's banking data from Excel tables.
+        All figures are scaled to Millions IDR.
+        """
+        yr_str = str(year)
+        raw_assets = self._find_val(df_bs, [r"^jumlah aset\s*$", r"^total assets\s*$", r"^total aset\s*$"], yr_str) or 0.0
+        scale = self._determine_scale_factor(raw_assets, general_info=general_info)
+
+        # 1. BALANCE SHEET
+        bs = BankingBS()
+        bs.cash_and_placements_bi_banks = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[
+                r"^kas dan setara kas\s*$",
+                r"^giro pada bank indonesia\s*$",
+                r"^penempatan pada bank indonesia dan bank lain\s*$",
+                r"^cash and cash equivalents\s*$"
+            ],
+            year_col=yr_str, scale=scale
+        )
+
+        bs.marketable_securities = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^efek-efek\s*$", r"^surat berharga\s*$", r"^marketable securities\s*$"],
+            year_col=yr_str, scale=scale
+        )
+
+        bs.gross_loans = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^kredit yang diberikan\s*$", r"^pinjaman yang diberikan\s*$", r"^loans\s*$"],
+            year_col=yr_str, scale=scale
+        )
+
+        bs.allowance_impairment_loans = abs(self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[
+                r"^cadangan penurunan nilai atas kredit\s*$",
+                r"^cadangan kerugian penurunan nilai\s*$",
+                r"^penyisihan kerugian penurunan nilai\s*$"
+            ],
+            year_col=yr_str, scale=scale
+        ))
+
+        bs.net_loans = max(0.0, bs.gross_loans - bs.allowance_impairment_loans)
+        bs.total_earning_assets = bs.cash_and_placements_bi_banks + bs.marketable_securities + bs.net_loans
+
+        bs.net_fixed_assets = self._resolve_waterfall(
+            df_bs,
+            primary_patterns=[r"^aset tetap\s*$", r"^property,? plant and equipment\s*$"],
+            year_col=yr_str, scale=scale
+        )
+
+        official_assets = self._resolve_waterfall(
+            df_bs, [r"^jumlah aset\s*$", r"^total assets\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.total_assets = official_assets if official_assets > 0 else (bs.total_earning_assets + bs.net_fixed_assets)
+        bs.other_assets = max(0.0, bs.total_assets - (bs.total_earning_assets + bs.net_fixed_assets))
+
+        # Deposits
+        bs.current_accounts = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^giro\s*$", r"^current accounts\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.savings_deposits = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^tabungan\s*$", r"^savings deposits\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.time_deposits = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^deposito berjangka\s*$", r"^deposito\s*$", r"^time deposits\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.sharia_deposits = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^simpanan syariah\s*$", r"^sharia deposits\s*$"], year_col=yr_str, scale=scale
+        )
+        dpk_sum = bs.current_accounts + bs.savings_deposits + bs.time_deposits + bs.sharia_deposits
+        official_dpk = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^simpanan nasabah\s*$", r"^simpanan dari nasabah\s*$", r"^deposits from customers\s*$"],
+            year_col=yr_str, scale=scale
+        )
+        bs.total_customer_deposits = official_dpk if official_dpk > 0 else dpk_sum
+
+        bs.deposits_from_other_banks = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^simpanan dari bank lain\s*$", r"^deposits from other banks\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.borrowings_issued_debt = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^pinjaman yang diterima\s*$", r"^efek-efek yang diterbitkan\s*$", r"^surat berharga yang diterbitkan\s*$"],
+            year_col=yr_str, scale=scale
+        )
+
+        official_liab = self._resolve_waterfall(
+            df_bs, [r"^jumlah liabilitas\s*$", r"^total liabilities\s*$"], year_col=yr_str, scale=scale
+        )
+        syirkah_funds = self._resolve_waterfall(
+            df_bs, [r"^jumlah dana syirkah temporer\s*$", r"^dana syirkah temporer\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.temporary_syirkah_funds = syirkah_funds
+
+        sub_liab = bs.total_customer_deposits + bs.deposits_from_other_banks + bs.borrowings_issued_debt
+        if official_liab > 0:
+            bs.total_liabilities = official_liab
+            bs.other_liabilities = max(0.0, bs.total_liabilities - sub_liab)
+        else:
+            bs.total_liabilities = sub_liab
+            bs.other_liabilities = 0.0
+
+        official_equity = self._resolve_waterfall(
+            df_bs, [r"^jumlah ekuitas\s*$", r"^total equity\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.total_equity = official_equity if official_equity > 0 else max(0.0, bs.total_assets - (bs.total_liabilities + bs.temporary_syirkah_funds))
+
+        bs.share_capital = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^modal saham\s*$", r"^share capital\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.retained_earnings = self._resolve_waterfall(
+            df_bs, primary_patterns=[r"^saldo laba\s*$", r"^retained earnings\s*$"], year_col=yr_str, scale=scale
+        )
+        bs.other_equity = max(0.0, bs.total_equity - (bs.share_capital + bs.retained_earnings))
+
+        bs.total_liabilities_and_equity = bs.total_liabilities + bs.temporary_syirkah_funds + bs.total_equity
+        bs.balance_check = round(bs.total_assets - bs.total_liabilities_and_equity, 2)
+        if abs(bs.balance_check) < 1.0:
+            bs.balance_check = 0.0
+
+        # 2. INCOME STATEMENT
+        is_stmt = BankingIS()
+        is_stmt.interest_income = self._resolve_waterfall(
+            df_is, primary_patterns=[r"^pendapatan bunga dan syariah\s*$", r"^pendapatan bunga\s*$", r"^interest income\s*$"],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.interest_expense = abs(self._resolve_waterfall(
+            df_is, primary_patterns=[r"^beban bunga dan syariah\s*$", r"^beban bunga\s*$", r"^interest expense\s*$"],
+            year_col=yr_str, scale=scale
+        ))
+        is_stmt.net_interest_income = is_stmt.interest_income - is_stmt.interest_expense
+
+        is_stmt.non_interest_income = self._resolve_waterfall(
+            df_is, primary_patterns=[r"^pendapatan operasional lainnya\s*$", r"^pendapatan non-bunga\s*$", r"^other operating income\s*$"],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.total_operating_income = is_stmt.net_interest_income + is_stmt.non_interest_income
+
+        is_stmt.operating_expenses = abs(self._resolve_waterfall(
+            df_is, primary_patterns=[r"^beban operasional lainnya\s*$", r"^beban operasional\s*$", r"^other operating expenses\s*$"],
+            year_col=yr_str, scale=scale
+        ))
+        is_stmt.ppop = is_stmt.total_operating_income - is_stmt.operating_expenses
+
+        is_stmt.provision_impairment_losses = abs(self._resolve_waterfall(
+            df_is, primary_patterns=[
+                r"^beban penyisihan kerugian penurunan nilai\s*$",
+                r"^penyisihan kerugian penurunan nilai\s*$",
+                r"^beban cadangan kerugian penurunan nilai\s*$",
+                r"^allowances for impairment losses\s*$"
+            ],
+            year_col=yr_str, scale=scale
+        ))
+
+        official_op_profit = self._resolve_waterfall(
+            df_is, primary_patterns=[r"^laba operasional\s*$", r"^laba usaha\s*$", r"^operating profit\s*$"],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.operating_profit = official_op_profit if official_op_profit != 0.0 else (is_stmt.ppop - is_stmt.provision_impairment_losses)
+
+        official_ebt = self._resolve_waterfall(
+            df_is, primary_patterns=[r"laba.*sebelum.*pajak\b", r"profit.*before.*tax\b"],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.ebt = official_ebt if official_ebt != 0.0 else is_stmt.operating_profit
+        is_stmt.non_operating_items = is_stmt.ebt - is_stmt.operating_profit
+
+        is_stmt.tax_expense = abs(self._resolve_waterfall(
+            df_is, primary_patterns=[r"beban pajak\b", r"tax expense\b"], year_col=yr_str, scale=scale
+        ))
+
+        official_ni = self._resolve_waterfall(
+            df_is, primary_patterns=[r"^jumlah laba\b", r"^laba tahun berjalan\b", r"^laba bersih\b", r"^net profit\b"],
+            year_col=yr_str, scale=scale
+        )
+        is_stmt.net_income = official_ni if official_ni != 0.0 else (is_stmt.ebt - is_stmt.tax_expense)
+        is_stmt.net_income_parent = self._resolve_waterfall(
+            df_is, primary_patterns=[r"laba.*entitas induk\b", r"profit attributable to parent\b"], year_col=yr_str, scale=scale
+        ) or is_stmt.net_income
+
+        # 3. CASH FLOW STATEMENT
+        cf = BankingCF()
+        cf.operating_cash_flow = self._resolve_waterfall(
+            df_cf, primary_patterns=[r"arus kas.*aktivitas operasi\b", r"operating activities\b"], year_col=yr_str, scale=scale
+        )
+        cf.capex = abs(self._resolve_waterfall(
+            df_cf, primary_patterns=[r"perolehan aset tetap\b", r"acquisition of property\b"], year_col=yr_str, scale=scale
+        ))
+        cf.investing_cash_flow = self._resolve_waterfall(
+            df_cf, primary_patterns=[r"arus kas.*aktivitas investasi\b", r"investing activities\b"], year_col=yr_str, scale=scale
+        )
+        cf.dividends_paid = abs(self._resolve_waterfall(
+            df_cf, primary_patterns=[r"pembayaran dividen\b", r"dividends paid\b"], year_col=yr_str, scale=scale
+        ))
+        cf.financing_cash_flow = self._resolve_waterfall(
+            df_cf, primary_patterns=[r"arus kas.*aktivitas pendanaan\b", r"financing activities\b"], year_col=yr_str, scale=scale
+        )
+        cf.net_change_in_cash = self._resolve_waterfall(
+            df_cf, primary_patterns=[r"kenaikan.*kas dan setara kas\b", r"net increase.*cash\b"], year_col=yr_str, scale=scale
+        )
+        cf.ending_cash = bs.cash_and_placements_bi_banks
         cf.beginning_cash = max(0.0, cf.ending_cash - cf.net_change_in_cash)
 
         return is_stmt, bs, cf

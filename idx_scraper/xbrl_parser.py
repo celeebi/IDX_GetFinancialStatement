@@ -12,7 +12,10 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, Optional, Tuple, Union
 
-from .proforma.schema import NormalizedIS, NormalizedBS, NormalizedCF
+from .proforma.schema import (
+    NormalizedIS, NormalizedBS, NormalizedCF,
+    BankingIS, BankingBS, BankingCF
+)
 
 logger = logging.getLogger("idx_scraper.xbrl_parser")
 
@@ -293,6 +296,242 @@ class XBRLParser:
             net_change_in_cash=net_cash_change,
             beginning_cash=beg_cash,
             ending_cash=cash
+        )
+
+        return is_stmt, bs_stmt, cf_stmt
+
+    @classmethod
+    def extract_banking_statements(
+        cls,
+        facts: Dict[Tuple[str, str], float],
+        year: int,
+        target_scale: float = 1_000_000.0  # Full IDR -> Millions IDR
+    ) -> Tuple[BankingIS, BankingBS, BankingCF]:
+        """
+        Extract and assemble canonical BankingIS, BankingBS, and BankingCF
+        for Banking / Financial Institutions Archetype from XBRL facts dictionary.
+        """
+        def g(tag: str, ctx: str = "CurrentYearDuration") -> float:
+            return facts.get((tag, ctx), 0.0)
+
+        m = target_scale
+
+        # -------------------------------------------------------------
+        # 1. BANKING INCOME STATEMENT
+        # -------------------------------------------------------------
+        int_inc = (g("TotalInterestAndShariaIncome") or 
+                   g("SubtotalInterestIncome") or 
+                   g("InterestIncome") or 
+                   g("GrossInterestIncome")) / m
+
+        int_exp = (g("TotalInterestAndShariaExpense") or 
+                   g("SubtotalInterestExpense") or 
+                   g("InterestExpenses") or 
+                   g("GrossInterestExpense")) / m
+
+        nii = int_inc - int_exp
+
+        non_int_inc = (g("OtherOperatingIncome") or 
+                       g("IncomeFromOtherOperatingTransactions") or 
+                       (g("FeesAndCommissionsIncome") + g("GainLossOnForeignExchangeOperating"))) / m
+
+        tot_op_inc = nii + non_int_inc
+
+        opex = (g("OtherOperatingExpenses") or 
+                (g("GeneralAndAdministrativeExpenses") + g("SalariesAndEmployeeBenefitsExpense") + g("PersonnelExpenses")) or
+                g("OperatingExpenses")) / m
+
+        ppop = tot_op_inc - opex
+
+        ckpn = (g("ProvisionDuringTheYearofAllowanceforImpairmentLossesonLoans") + 
+                g("AllowancesForImpairmentLossesOnEarningsAssets")) / m
+        if ckpn == 0.0:
+            ckpn = abs(g("RecoveryOfImpairmentLossesOfFinancialAssets") or 
+                       g("ImpairmentLossesOnFinancialAssets") or 
+                       g("ImpairmentLossExpense")) / m
+
+        op_profit = (g("OperatingIncome") or 
+                     g("ProfitLossFromOperatingActivities") or 
+                     (ppop - ckpn)) / m
+
+        ebt = (g("ProfitLossBeforeIncomeTax") or g("ProfitLossBeforeTax")) / m
+        if ebt == 0.0:
+            ebt = op_profit
+
+        non_op = ebt - op_profit
+
+        tax = abs(g("TaxBenefitExpenses") or g("IncomeTaxExpenseContinuingOperations")) / m
+        ni = (g("ProfitLoss") or g("ProfitLossFromContinuingOperations")) / m
+        if ni == 0.0:
+            ni = ebt - tax
+
+        ni_parent = (g("ProfitLossAttributableToParentEntity") or ni) / m
+
+        is_stmt = BankingIS(
+            interest_income=int_inc,
+            interest_expense=int_exp,
+            net_interest_income=nii,
+            non_interest_income=non_int_inc,
+            total_operating_income=tot_op_inc,
+            operating_expenses=opex,
+            ppop=ppop,
+            provision_impairment_losses=ckpn,
+            operating_profit=op_profit,
+            non_operating_items=non_op,
+            ebt=ebt,
+            tax_expense=tax,
+            net_income=ni,
+            net_income_parent=ni_parent
+        )
+
+        # -------------------------------------------------------------
+        # 2. BANKING BALANCE SHEET
+        # -------------------------------------------------------------
+        cash_bi = (g("CashAndCashEquivalents", "CurrentYearInstant") + 
+                   g("CurrentAccountsWithBankIndonesia", "CurrentYearInstant") + 
+                   g("CurrentAccountsWithOtherBanksThirdParties", "CurrentYearInstant") + 
+                   g("PlacementsWithOtherBanksAndBankIndonesia", "CurrentYearInstant")) / m
+
+        mkt_sec = (g("OtherFinancialAssets", "CurrentYearInstant") + 
+                   g("MarketableSecurities", "CurrentYearInstant") + 
+                   g("GovernmentBonds", "CurrentYearInstant")) / m
+
+        gross_loans = (g("TotalLoansGross", "CurrentYearInstant") or 
+                       (g("LoansThirdParties", "CurrentYearInstant") + g("LoansRelatedParties", "CurrentYearInstant")) or
+                       g("Loans", "CurrentYearInstant") or 
+                       g("ConsumerFinancingReceivables", "CurrentYearInstant")) / m
+
+        ckpn_loans = (g("AllowanceForImpairmentLossesForLoans", "CurrentYearInstant") or 
+                      g("AllowanceForImpairmentLossesOnEarningsAssets", "CurrentYearInstant") or 
+                      g("AllowancesForImpairmentLossesOnEarningsAssets", "CurrentYearInstant")) / m
+
+        tot_loans_net_raw = g("TotalLoansNet", "CurrentYearInstant")
+        net_loans = (tot_loans_net_raw / m) if tot_loans_net_raw > 0 else max(0.0, gross_loans - ckpn_loans)
+
+        fixed_assets = (g("PropertyPlantAndEquipment", "CurrentYearInstant") or 
+                        g("PropertyAndEquipment", "CurrentYearInstant") or 
+                        g("PremisesAndEquipment", "CurrentYearInstant")) / m
+
+        tot_assets = g("Assets", "CurrentYearInstant") / m
+
+        tot_earning = cash_bi + mkt_sec + net_loans
+        other_assets = max(0.0, tot_assets - (tot_earning + fixed_assets))
+
+        # Deposits from Customers (DPK)
+        giro = (g("CurrentAccounts", "CurrentYearInstant") or 
+                (g("CurrentAccountsThirdParties", "CurrentYearInstant") + g("CurrentAccountsRelatedParties", "CurrentYearInstant"))) / m
+
+        tabungan = (g("SavingsDeposits", "CurrentYearInstant") or 
+                    (g("SavingsDepositsThirdParties", "CurrentYearInstant") + g("SavingsDepositsRelatedParties", "CurrentYearInstant")) or
+                    (g("SavingsThirdParties", "CurrentYearInstant") + g("SavingsRelatedParties", "CurrentYearInstant"))) / m
+
+        deposito = (g("TimeDeposits", "CurrentYearInstant") or 
+                    (g("TimeDepositsThirdParties", "CurrentYearInstant") + g("TimeDepositsRelatedParties", "CurrentYearInstant"))) / m
+
+        sharia_dep = g("ShariaDeposits", "CurrentYearInstant") / m
+
+        tot_dpk = giro + tabungan + deposito + sharia_dep
+        if tot_dpk == 0.0:
+            tot_dpk = (g("DepositsFromCustomers", "CurrentYearInstant") or g("LiabilitiesToCustomers", "CurrentYearInstant")) / m
+
+        other_bank_dep = (g("OtherBanksDepositsThirdParties", "CurrentYearInstant") + 
+                          g("DepositsFromOtherBanks", "CurrentYearInstant") +
+                          g("OtherBanksDeposits", "CurrentYearInstant")) / m
+
+        borrowings = (g("Borrowings", "CurrentYearInstant") + 
+                      g("SecuritiesIssued", "CurrentYearInstant") + 
+                      g("BondsPayable", "CurrentYearInstant") + 
+                      g("SubordinatedLoans", "CurrentYearInstant")) / m
+
+        tot_liab_official = g("Liabilities", "CurrentYearInstant") / m
+        other_liab = max(0.0, tot_liab_official - (tot_dpk + other_bank_dep + borrowings)) if tot_liab_official > 0 else 0.0
+        tot_liab = tot_liab_official if tot_liab_official > 0 else (tot_dpk + other_bank_dep + borrowings + other_liab)
+
+        syirkah = (g("TemporarySyirkahFunds", "CurrentYearInstant") or g("SyirkahFunds", "CurrentYearInstant")) / m
+
+        tot_equity = g("Equity", "CurrentYearInstant") / m
+        share_cap = (g("ShareCapital", "CurrentYearInstant") or 
+                     g("CapitalShare", "CurrentYearInstant") or 
+                     g("IssuedAndFullyPaidCapital", "CurrentYearInstant")) / m
+
+        re_tot = (g("RetainedEarnings", "CurrentYearInstant") or 
+                  (g("UnappropriatedRetainedEarnings", "CurrentYearInstant") + g("AppropriatedRetainedEarnings", "CurrentYearInstant"))) / m
+
+        other_eq = max(0.0, tot_equity - (share_cap + re_tot)) if tot_equity > 0 else 0.0
+
+        tot_liab_syirkah_eq = tot_liab + syirkah + tot_equity
+        bs_check = tot_assets - tot_liab_syirkah_eq
+
+        if abs(bs_check) < 1.0:
+            bs_check = 0.0
+
+        bs_stmt = BankingBS(
+            cash_and_placements_bi_banks=cash_bi,
+            marketable_securities=mkt_sec,
+            gross_loans=gross_loans,
+            allowance_impairment_loans=ckpn_loans,
+            net_loans=net_loans,
+            total_earning_assets=tot_earning,
+            net_fixed_assets=fixed_assets,
+            other_assets=other_assets,
+            total_assets=tot_assets,
+            current_accounts=giro,
+            savings_deposits=tabungan,
+            time_deposits=deposito,
+            sharia_deposits=sharia_dep,
+            total_customer_deposits=tot_dpk,
+            deposits_from_other_banks=other_bank_dep,
+            borrowings_issued_debt=borrowings,
+            other_liabilities=other_liab,
+            total_liabilities=tot_liab,
+            temporary_syirkah_funds=syirkah,
+            share_capital=share_cap,
+            retained_earnings=re_tot,
+            other_equity=other_eq,
+            total_equity=tot_equity,
+            total_liabilities_and_equity=tot_liab_syirkah_eq,
+            balance_check=bs_check
+        )
+
+        # -------------------------------------------------------------
+        # 3. BANKING CASH FLOW STATEMENT
+        # -------------------------------------------------------------
+        ocf = (g("NetCashFlowsReceivedFromUsedInOperatingActivities") or 
+               g("NetCashFlowsFromUsedInOperatingActivities")) / m
+
+        capex = (g("PaymentsForAcquisitionOfPropertyPlantAndEquipment") or 
+                 g("PaymentsForAcquisitionOfPropertyAndEquipment") or 
+                 g("PaymentsToAcquirePropertyPlantAndEquipment") or 
+                 g("PurchaseOfPropertyPlantAndEquipment")) / m
+
+        cfi = (g("NetCashFlowsReceivedFromUsedInInvestingActivities") or 
+               g("NetCashFlowsFromUsedInInvestingActivities") or 
+               -capex) / m
+
+        divs = (g("DistributionsOfCashDividends") or 
+                g("DividendsPaid") or 
+                g("PaymentsOfDividends")) / m
+
+        cff = (g("NetCashFlowsReceivedFromUsedInFinancingActivities") or 
+               g("NetCashFlowsFromUsedInFinancingActivities")) / m
+
+        net_cash_change = (g("NetIncreaseDecreaseInCashAndCashEquivalents") or (ocf + cfi + cff)) / m
+        cash_equiv = (g("CashAndCashEquivalentsCashFlows", "CurrentYearInstant") or 
+                      g("CashAndCashEquivalents", "CurrentYearInstant")) / m
+        beg_cash = (g("CashAndCashEquivalentsCashFlows", "PriorEndYearInstant") or 
+                    g("CashAndCashEquivalents", "PriorEndYearInstant") or 
+                    (cash_equiv - net_cash_change)) / m
+
+        cf_stmt = BankingCF(
+            operating_cash_flow=ocf,
+            capex=capex,
+            investing_cash_flow=cfi,
+            dividends_paid=divs,
+            net_debt_change=0.0,
+            financing_cash_flow=cff,
+            net_change_in_cash=net_cash_change,
+            beginning_cash=beg_cash,
+            ending_cash=cash_equiv
         )
 
         return is_stmt, bs_stmt, cf_stmt

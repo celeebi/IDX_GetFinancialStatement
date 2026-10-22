@@ -8,7 +8,10 @@ from typing import Dict, Any, List, Optional
 import statistics
 import pandas as pd
 
-from .schema import NormalizedIS, NormalizedBS, NormalizedCF, OperationalDrivers
+from .schema import (
+    NormalizedIS, NormalizedBS, NormalizedCF, OperationalDrivers,
+    BankingIS, BankingBS, BankingCF, BankingDrivers
+)
 
 
 class DriverCalculator:
@@ -125,3 +128,110 @@ class DriverCalculator:
             "5_Year_Average": avg_5yr,
             "Historical_Average": avg_5yr
         }
+
+
+class BankingDriverCalculator:
+    """Computes historical forecasting drivers and ratios for Banking / Financial Institutions."""
+
+    @staticmethod
+    def calculate_drivers(
+        years: List[int],
+        is_dict: Dict[int, BankingIS],
+        bs_dict: Dict[int, BankingBS],
+        cf_dict: Dict[int, BankingCF]
+    ) -> Dict[int, BankingDrivers]:
+        """Compute operational drivers for each year for a banking entity."""
+        drivers_by_year: Dict[int, BankingDrivers] = {}
+        sorted_years = sorted(years)
+
+        for idx, yr in enumerate(sorted_years):
+            d = BankingDrivers()
+            is_stmt = is_dict.get(yr, BankingIS())
+            bs_stmt = bs_dict.get(yr, BankingBS())
+            cf_stmt = cf_dict.get(yr, BankingCF())
+
+            # 1. Growth Rates YoY
+            if idx > 0:
+                prev_yr = sorted_years[idx - 1]
+                prev_bs = bs_dict.get(prev_yr, BankingBS())
+                if prev_bs.gross_loans > 0 and bs_stmt.gross_loans > 0:
+                    d.loan_growth_yoy = (bs_stmt.gross_loans - prev_bs.gross_loans) / prev_bs.gross_loans
+                if prev_bs.total_customer_deposits > 0 and bs_stmt.total_customer_deposits > 0:
+                    d.deposit_growth_yoy = (bs_stmt.total_customer_deposits - prev_bs.total_customer_deposits) / prev_bs.total_customer_deposits
+
+            # 2. Net Interest Margin (NIM %) = NII / Earning Assets
+            if bs_stmt.total_earning_assets > 0:
+                d.net_interest_margin_pct = is_stmt.net_interest_income / bs_stmt.total_earning_assets
+
+            # 3. Cost of Funds (CoF %) = Interest Expense / Total Deposits (DPK)
+            if bs_stmt.total_customer_deposits > 0:
+                d.cost_of_funds_pct = is_stmt.interest_expense / bs_stmt.total_customer_deposits
+
+            # 4. Loan-to-Deposit Ratio (LDR %) = Gross Loans / Total Deposits (DPK)
+            if bs_stmt.total_customer_deposits > 0 and bs_stmt.gross_loans > 0:
+                d.loan_to_deposit_ratio_pct = bs_stmt.gross_loans / bs_stmt.total_customer_deposits
+
+            # 5. CASA Ratio (%) = (Current Accounts + Savings) / Total Customer Deposits
+            if bs_stmt.total_customer_deposits > 0:
+                casa_amt = bs_stmt.current_accounts + bs_stmt.savings_deposits
+                d.casa_ratio_pct = casa_amt / bs_stmt.total_customer_deposits
+
+            # 6. Cost-to-Income / BOPO (CIR %) = Operating Expenses / Total Operating Income
+            if is_stmt.total_operating_income > 0:
+                d.cost_to_income_ratio_pct = is_stmt.operating_expenses / is_stmt.total_operating_income
+
+            # 7. Credit Cost / Provisioning Rate (%) = CKPN / Gross Loans
+            if bs_stmt.gross_loans > 0 and is_stmt.provision_impairment_losses > 0:
+                d.provision_rate_credit_cost_pct = is_stmt.provision_impairment_losses / bs_stmt.gross_loans
+
+            # 8. Return on Assets (ROA %) & Return on Equity (ROE %)
+            if bs_stmt.total_assets > 0:
+                d.return_on_assets_pct = is_stmt.net_income / bs_stmt.total_assets
+            if bs_stmt.total_equity > 0:
+                d.return_on_equity_pct = is_stmt.net_income / bs_stmt.total_equity
+
+            # 9. Capital / Solvency: Equity to Assets (%)
+            if bs_stmt.total_assets > 0:
+                d.equity_to_assets_pct = bs_stmt.total_equity / bs_stmt.total_assets
+
+            # 10. Effective Tax Rate (%)
+            if is_stmt.ebt > 0:
+                d.effective_tax_rate_pct = is_stmt.tax_expense / is_stmt.ebt
+
+            # 11. Dividend Payout Ratio (%)
+            if is_stmt.net_income > 0 and cf_stmt.dividends_paid > 0:
+                d.dividend_payout_pct = cf_stmt.dividends_paid / is_stmt.net_income
+            else:
+                d.dividend_payout_pct = 0.0
+
+            drivers_by_year[yr] = d
+
+        return drivers_by_year
+
+    @staticmethod
+    def build_summary_benchmarks(
+        drivers_by_year: Dict[int, BankingDrivers]
+    ) -> Dict[str, Dict[str, Optional[float]]]:
+        """Compute 3-Year Median and Historical Average benchmarks across banking drivers."""
+        sorted_years = sorted(drivers_by_year.keys())
+        last_3_years = sorted_years[-3:] if len(sorted_years) >= 3 else sorted_years
+
+        keys = list(BankingDrivers().to_dict().keys())
+        median_3yr: Dict[str, Optional[float]] = {}
+        avg_hist: Dict[str, Optional[float]] = {}
+
+        for k in keys:
+            vals_3 = [drivers_by_year[y].to_dict().get(k) for y in last_3_years]
+            vals_3_valid = [v for v in vals_3 if v is not None and isinstance(v, (int, float))]
+            median_3yr[k] = statistics.median(vals_3_valid) if vals_3_valid else None
+
+            vals_all = [drivers_by_year[y].to_dict().get(k) for y in sorted_years]
+            vals_all_valid = [v for v in vals_all if v is not None and isinstance(v, (int, float))]
+            avg_hist[k] = statistics.mean(vals_all_valid) if vals_all_valid else None
+
+        return {
+            "3_Year_Median": median_3yr,
+            "5_Year_Average": avg_hist,
+            "Historical_Average": avg_hist
+        }
+

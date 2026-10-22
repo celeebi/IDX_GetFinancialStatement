@@ -13,7 +13,10 @@ from .excel_parser import parse_financial_statement_file
 from .xbrl_parser import XBRLParser
 from .multi_year import merge_statement_tables
 from .year_utils import format_year_range_slug, format_year_range_label
-from .proforma import FinancialNormalizer, DriverCalculator, ReadyToForecastExporter
+from .proforma import (
+    FinancialNormalizer, DriverCalculator, BankingDriverCalculator,
+    ReadyToForecastExporter, detect_archetype
+)
 
 logger = logging.getLogger("idx_scraper.scraper")
 
@@ -230,6 +233,15 @@ class IDXFinancialScraper:
         if not valid_years:
             valid_years = years_to_process
 
+        # Detect sector & financial modeling archetype
+        archetype = detect_archetype(
+            ticker=ticker,
+            general_info=info_dict,
+            sheet_names=xls.sheet_names
+        )
+        arch_desc = "Banking & Financial Institutions Model" if archetype == "banking" else "Corporate Operating Model"
+        print(f"[+] Detected Archetype: {archetype.upper()} ({arch_desc})")
+
         # 3. Normalize each year (Primary: XBRL instance, Fallback: Excel waterfall)
         normalizer = FinancialNormalizer(target_scale="millions")
         is_dict = {}
@@ -257,7 +269,10 @@ class IDXFinancialScraper:
                     try:
                         facts = XBRLParser.load_facts(z_path)
                         if facts:
-                            is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, yr)
+                            if archetype == "banking":
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts, yr)
+                            else:
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, yr)
                             is_dict[yr] = is_stmt
                             bs_dict[yr] = bs_stmt
                             cf_dict[yr] = cf_stmt
@@ -269,21 +284,35 @@ class IDXFinancialScraper:
 
             if not xbrl_loaded:
                 print(f"  [*] Year {yr}: Falling back to Excel waterfall resolution...")
-                is_stmt, bs_stmt, cf_stmt = normalizer.normalize_year(
-                    year=yr,
-                    df_is=df_is,
-                    df_bs=df_bs,
-                    df_cf=df_cf,
-                    general_info=info_dict
-                )
+                if archetype == "banking":
+                    is_stmt, bs_stmt, cf_stmt = normalizer.normalize_banking_year(
+                        year=yr,
+                        df_is=df_is,
+                        df_bs=df_bs,
+                        df_cf=df_cf,
+                        general_info=info_dict
+                    )
+                else:
+                    is_stmt, bs_stmt, cf_stmt = normalizer.normalize_year(
+                        year=yr,
+                        df_is=df_is,
+                        df_bs=df_bs,
+                        df_cf=df_cf,
+                        general_info=info_dict
+                    )
                 is_dict[yr] = is_stmt
                 bs_dict[yr] = bs_stmt
                 cf_dict[yr] = cf_stmt
 
         # 4. Compute operational drivers
-        print("[+] Calculating historical forecasting drivers (DSO, DIO, DPO, margins, Capex)...")
-        drivers_by_year = DriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
-        benchmarks = DriverCalculator.build_summary_benchmarks(drivers_by_year)
+        if archetype == "banking":
+            print("[+] Calculating historical banking drivers (NIM, CoF, LDR, CASA, BOPO/CIR, Credit Cost, ROA, ROE)...")
+            drivers_by_year = BankingDriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
+            benchmarks = BankingDriverCalculator.build_summary_benchmarks(drivers_by_year)
+        else:
+            print("[+] Calculating historical forecasting drivers (DSO, DIO, DPO, margins, Capex)...")
+            drivers_by_year = DriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
+            benchmarks = DriverCalculator.build_summary_benchmarks(drivers_by_year)
 
         # 5. Export 5-tab ready-to-forecast workbook
         ticker_dir = os.path.join(self.output_dir, ticker)
@@ -299,7 +328,8 @@ class IDXFinancialScraper:
             bs_dict=bs_dict,
             cf_dict=cf_dict,
             drivers_by_year=drivers_by_year,
-            general_info=info_dict
+            general_info=info_dict,
+            archetype=archetype
         )
 
         print(f"[OK] Ready-to-Forecast model exported successfully to:\n     {os.path.abspath(output_path)}")
@@ -308,6 +338,7 @@ class IDXFinancialScraper:
             "ticker": ticker,
             "status": "success",
             "ready_excel": output_path,
+            "archetype": archetype,
             "years": valid_years,
             "is_dict": is_dict,
             "bs_dict": bs_dict,

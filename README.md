@@ -10,6 +10,51 @@ It scrapes **5+ historical years (e.g. 2020–2024+)** of audited annual filings
 
 ---
 
+## Dual-Archetype Architecture & Sector Handling
+
+The Indonesia Stock Exchange organizes filings into **8 industry-specific entry points**. Standard corporate pro forma metrics (such as DSO, DIO, DPO, and Capex % Rev) mathematically break down when applied to banks and financial institutions (where loans are assets and customer deposits are liabilities).
+
+To handle this, our pipeline automatically identifies the entity's sector and dispatches one of two **Macro Financial Modeling Archetypes**:
+
+```
+                              ┌────────────────────────────────────────┐
+                              │     IDX Financial Statement Filing     │
+                              └───────────────────┬────────────────────┘
+                                                  │
+                                                  ▼
+                               ┌──────────────────────────────────────┐
+                               │ Sector & Entry Point Auto-Detection  │
+                               │ (Metadata, Sheet Prefixes, Taxonomy) │
+                               └──────────────────┬───────────────────┘
+                                                  │
+                   ┌──────────────────────────────┴──────────────────────────────┐
+                   ▼                                                             ▼
+ ┌───────────────────────────────────┐                         ┌───────────────────────────────────┐
+ │   ARCHETYPE A: CORPORATE MODEL    │                         │  ARCHETYPE B: FINANCIAL / BANKING │
+ ├───────────────────────────────────┤                         ├───────────────────────────────────┤
+ │ • Entry Point 1: General Industry │                         │ • Entry Point 4: Banks & Sharia   │
+ │ • Entry Point 2: Property         │                         │ • Entry Point 5: Multifinance     │
+ │ • Entry Point 3: Infrastructure   │                         │ • Entry Point 6: Insurance        │
+ ├───────────────────────────────────┤                         ├───────────────────────────────────┤
+ │ Key Accounts:                     │                         │ Key Accounts:                     │
+ │ • Gross Revenue & COGS            │                         │ • Interest Income & Expense (NII) │
+ │ • Operating Profit / EBITDA       │                         │ • Customer Deposits (DPK)         │
+ │ • Trade Working Capital (AR, Inv) │                         │ • Gross Loans & Impairment (CKPN) │
+ │ • Capex & PP&E Roll-forward       │                         │ • Earning Assets & Placements     │
+ ├───────────────────────────────────┤                         ├───────────────────────────────────┤
+ │ Drivers & Ratios:                 │                         │ Drivers & Ratios:                 │
+ │ • Revenue Growth, Gross Margin %  │                         │ • Net Interest Margin (NIM %)     │
+ │ • Working Capital Days (DSO, DIO) │                         │ • Cost of Funds (CoF %)           │
+ │ • Capex % of Revenue              │                         │ • Loan-to-Deposit Ratio (LDR %)   │
+ │ • Debt / EBITDA, Interest Cover   │                         │ • CASA Ratio (%)                  │
+ └───────────────────────────────────┘                         │ • Cost-to-Income (BOPO / CIR %)   │
+                                                               │ • Credit Cost / Provision Rate    │
+                                                               │ • Return on Assets (ROA %) & ROE  │
+                                                               └───────────────────────────────────┘
+```
+
+---
+
 ## Architecture Overview
 
 ```
@@ -101,8 +146,9 @@ Project_scrapping/
 │   ├── scraper.py                           # High-level pipeline coordinator
 │   └── proforma/
 │       ├── __init__.py
-│       ├── schema.py                        # Dataclasses (IS, BS, CF, Drivers)
-│       ├── normalizer.py                    # 4-tier waterfall resolution engine
+│       ├── schema.py                        # Dataclasses (Corporate & Banking IS, BS, CF, Drivers)
+│       ├── dispatcher.py                    # Sector & Archetype auto-detection engine
+│       ├── normalizer.py                    # Waterfall resolution engine (Corporate & Banking)
 │       ├── drivers.py                       # Operational drivers & benchmark statistics
 │       └── export_ready.py                  # 5-tab Excel workbook exporter
 └── downloads/

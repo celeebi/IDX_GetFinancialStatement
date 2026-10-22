@@ -37,103 +37,202 @@ def display_ready_to_forecast_summary(res: dict):
     bs_dict = res.get("bs_dict", {})
     drivers_by_year = res.get("drivers_by_year", {})
     benchmarks = res.get("benchmarks", {})
+    archetype = res.get("archetype", "corporate")
 
-    print("\n" + "=" * 72)
-    print(f"      3-STATEMENT READY-TO-FORECAST FINANCIALS: {ticker}")
+    arch_title = "BANKING & FINANCIAL INSTITUTIONS" if archetype == "banking" else "CORPORATE 3-STATEMENT"
+    print("\n" + "=" * 74)
+    print(f"      {arch_title} READY-TO-FORECAST FINANCIALS: {ticker}")
     print("      (All Amounts Normalized to Millions IDR / Juta Rupiah)")
-    print("=" * 72)
+    print("=" * 74)
 
-    # 1. Income Statement Highlights
-    is_rows = []
-    is_keys = [
-        "Gross Revenue", "Cost of Goods Sold (COGS)", "Gross Profit",
-        "SG&A / Operating Expenses", "EBITDA", "Operating Income (EBIT)",
-        "Earnings Before Tax (EBT)", "Net Income"
-    ]
-    for k in is_keys:
-        row = [k]
-        for y in years:
-            v = is_dict.get(y).to_dict().get(k, 0.0)
-            row.append(f"{v:,.0f}" if v is not None else "-")
-        is_rows.append(row)
-
-    print("\n[NORMALIZED INCOME STATEMENT - Millions IDR]")
-    headers_is = ["Metric"] + [str(y) for y in years]
-    print(tabulate(is_rows, headers=headers_is, tablefmt="fancy_grid"))
-
-    # 2. Balance Sheet Highlights
-    bs_rows = []
-    bs_keys = [
-        "Cash & Cash Equivalents", "Accounts Receivable", "Inventories",
-        "Total Current Assets", "Net PP&E", "TOTAL ASSETS",
-        "Accounts Payable", "Short-Term Debt", "Total Current Liabilities",
-        "Long-Term Debt", "TOTAL LIABILITIES", "TOTAL EQUITY",
-        "BALANCE CHECK (Assets - Liab&Eq)"
-    ]
-    for k in bs_keys:
-        row = [k]
-        for y in years:
-            v = bs_dict.get(y).to_dict().get(k, 0.0)
-            if "BALANCE CHECK" in k:
-                status = "OK (0.0)" if abs(v) < 0.05 else f"DIFF ({v:,.1f})"
-                row.append(status)
-            else:
+    if archetype == "banking":
+        # 1. Banking Income Statement
+        is_rows = []
+        is_keys = [
+            "Interest & Sharia Income", "Interest & Sharia Expense",
+            "Net Interest Income (NII)", "Non-Interest & Fee Income",
+            "Total Operating Income", "Operating Expenses (Opex)",
+            "Pre-Provision Operating Profit (PPOP)", "Provision for Impairment (CKPN)",
+            "Operating Profit", "Earnings Before Tax (EBT)", "Net Income"
+        ]
+        for k in is_keys:
+            row = [k]
+            for y in years:
+                v = is_dict.get(y).to_dict().get(k, 0.0)
                 row.append(f"{v:,.0f}" if v is not None else "-")
-        bs_rows.append(row)
+            is_rows.append(row)
 
-    print("\n[NORMALIZED BALANCE SHEET - Millions IDR]")
-    headers_bs = ["Metric"] + [str(y) for y in years]
-    print(tabulate(bs_rows, headers=headers_bs, tablefmt="fancy_grid"))
+        print("\n[NORMALIZED BANKING INCOME STATEMENT - Millions IDR]")
+        headers_is = ["Metric"] + [str(y) for y in years]
+        print(tabulate(is_rows, headers=headers_is, tablefmt="fancy_grid"))
 
-    # 3. Operational Forecasting Drivers
-    drv_rows = []
-    drv_keys = [
-        ("Revenue Growth (YoY)", True, False),
-        ("Gross Margin (%)", True, False),
-        ("SG&A / Opex (% Rev)", True, False),
-        ("Operating Margin (EBIT %)", True, False),
-        ("Net Profit Margin (%)", True, False),
-        ("Effective Tax Rate (%)", True, False),
-        ("DSO - Days Sales Outstanding (Days)", False, True),
-        ("DIO - Days Inventory Outstanding (Days)", False, True),
-        ("DPO - Days Payable Outstanding (Days)", False, True),
-        ("Capex (% of Revenue)", True, False),
-        ("D&A (% of Net PP&E)", True, False),
-        ("Dividend Payout Ratio (%)", True, False),
-    ]
+        # 2. Banking Balance Sheet
+        bs_rows = []
+        bs_keys = [
+            "Cash & Placements with BI & Banks", "Marketable Securities",
+            "Gross Loans & Financing", "Allowance for Impairment (CKPN)",
+            "Net Loans & Financing", "Total Earning Assets", "TOTAL ASSETS",
+            "Total Customer Deposits (DPK)", "Deposits from Other Banks",
+            "Borrowings & Debt Issued", "TOTAL LIABILITIES",
+            "Temporary Syirkah Funds", "TOTAL EQUITY",
+            "BALANCE CHECK (Assets - Liab&Eq)"
+        ]
+        for k in bs_keys:
+            row = [k]
+            for y in years:
+                v = bs_dict.get(y).to_dict().get(k, 0.0)
+                if "BALANCE CHECK" in k:
+                    status = "OK (0.0)" if abs(v) < 0.05 else f"DIFF ({v:,.1f})"
+                    row.append(status)
+                else:
+                    row.append(f"{v:,.0f}" if v is not None else "-")
+            bs_rows.append(row)
 
-    n_years = len(years)
+        print("\n[NORMALIZED BANKING BALANCE SHEET - Millions IDR]")
+        headers_bs = ["Metric"] + [str(y) for y in years]
+        print(tabulate(bs_rows, headers=headers_bs, tablefmt="fancy_grid"))
 
-    for k, is_pct, is_days in drv_keys:
-        row = [k]
-        for y in years:
-            v = drivers_by_year.get(y).to_dict().get(k)
-            if v is not None:
-                row.append(f"{v * 100:.1f}%" if is_pct else (f"{v:.1f}" if is_days else f"{v:.2f}"))
-            else:
-                row.append("-")
+        # 3. Banking Operational Ratios & Drivers
+        drv_rows = []
+        drv_keys = [
+            "Loan Growth (YoY)",
+            "Deposit Growth (YoY)",
+            "Net Interest Margin (NIM %)",
+            "Cost of Funds (CoF %)",
+            "Loan-to-Deposit Ratio (LDR %)",
+            "CASA Ratio (%)",
+            "Cost-to-Income / BOPO (CIR %)",
+            "Credit Cost / Provision Rate (%)",
+            "Return on Assets (ROA %)",
+            "Return on Equity (ROE %)",
+            "Equity to Assets Ratio (%)",
+            "Effective Tax Rate (%)",
+            "Dividend Payout Ratio (%)",
+        ]
+        n_years = len(years)
 
-        # Benchmarks based on length
+        for k in drv_keys:
+            row = [k]
+            for y in years:
+                v = drivers_by_year.get(y).to_dict().get(k)
+                if v is not None:
+                    row.append(f"{v * 100:.2f}%")
+                else:
+                    row.append("-")
+
+            if n_years >= 3:
+                med = benchmarks.get("3_Year_Median", {}).get(k)
+                avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+                row.append(f"{med * 100:.2f}%" if med is not None else "-")
+                row.append(f"{avg * 100:.2f}%" if avg is not None else "-")
+            elif n_years == 2:
+                avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+                row.append(f"{avg * 100:.2f}%" if avg is not None else "-")
+
+            drv_rows.append(row)
+
+        print("\n[HISTORICAL BANKING DRIVERS & FINANCIAL RATIOS]")
         if n_years >= 3:
-            med = benchmarks.get("3_Year_Median", {}).get(k)
-            avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
-            row.append(f"{med * 100:.1f}%" if (is_pct and med is not None) else (f"{med:.1f}" if (is_days and med is not None) else "-"))
-            row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+            headers_drv = ["Banking Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
         elif n_years == 2:
-            avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
-            row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
-        
-        drv_rows.append(row)
+            headers_drv = ["Banking Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+        else:
+            headers_drv = ["Banking Driver / Ratio", str(years[0])]
 
-    print("\n[HISTORICAL OPERATIONAL DRIVERS & RATIOS]")
-    if n_years >= 3:
-        headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
-    elif n_years == 2:
-        headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+        print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
+
     else:
-        headers_drv = ["Driver / Ratio", str(years[0])]
+        # 1. Income Statement Highlights
+        is_rows = []
+        is_keys = [
+            "Gross Revenue", "Cost of Goods Sold (COGS)", "Gross Profit",
+            "SG&A / Operating Expenses", "EBITDA", "Operating Income (EBIT)",
+            "Earnings Before Tax (EBT)", "Net Income"
+        ]
+        for k in is_keys:
+            row = [k]
+            for y in years:
+                v = is_dict.get(y).to_dict().get(k, 0.0)
+                row.append(f"{v:,.0f}" if v is not None else "-")
+            is_rows.append(row)
 
-    print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
+        print("\n[NORMALIZED INCOME STATEMENT - Millions IDR]")
+        headers_is = ["Metric"] + [str(y) for y in years]
+        print(tabulate(is_rows, headers=headers_is, tablefmt="fancy_grid"))
+
+        # 2. Balance Sheet Highlights
+        bs_rows = []
+        bs_keys = [
+            "Cash & Cash Equivalents", "Accounts Receivable", "Inventories",
+            "Total Current Assets", "Net PP&E", "TOTAL ASSETS",
+            "Accounts Payable", "Short-Term Debt", "Total Current Liabilities",
+            "Long-Term Debt", "TOTAL LIABILITIES", "TOTAL EQUITY",
+            "BALANCE CHECK (Assets - Liab&Eq)"
+        ]
+        for k in bs_keys:
+            row = [k]
+            for y in years:
+                v = bs_dict.get(y).to_dict().get(k, 0.0)
+                if "BALANCE CHECK" in k:
+                    status = "OK (0.0)" if abs(v) < 0.05 else f"DIFF ({v:,.1f})"
+                    row.append(status)
+                else:
+                    row.append(f"{v:,.0f}" if v is not None else "-")
+            bs_rows.append(row)
+
+        print("\n[NORMALIZED BALANCE SHEET - Millions IDR]")
+        headers_bs = ["Metric"] + [str(y) for y in years]
+        print(tabulate(bs_rows, headers=headers_bs, tablefmt="fancy_grid"))
+
+        # 3. Operational Forecasting Drivers
+        drv_rows = []
+        drv_keys = [
+            ("Revenue Growth (YoY)", True, False),
+            ("Gross Margin (%)", True, False),
+            ("SG&A / Opex (% Rev)", True, False),
+            ("Operating Margin (EBIT %)", True, False),
+            ("Net Profit Margin (%)", True, False),
+            ("Effective Tax Rate (%)", True, False),
+            ("DSO - Days Sales Outstanding (Days)", False, True),
+            ("DIO - Days Inventory Outstanding (Days)", False, True),
+            ("DPO - Days Payable Outstanding (Days)", False, True),
+            ("Capex (% of Revenue)", True, False),
+            ("D&A (% of Net PP&E)", True, False),
+            ("Dividend Payout Ratio (%)", True, False),
+        ]
+
+        n_years = len(years)
+
+        for k, is_pct, is_days in drv_keys:
+            row = [k]
+            for y in years:
+                v = drivers_by_year.get(y).to_dict().get(k)
+                if v is not None:
+                    row.append(f"{v * 100:.1f}%" if is_pct else (f"{v:.1f}" if is_days else f"{v:.2f}"))
+                else:
+                    row.append("-")
+
+            # Benchmarks based on length
+            if n_years >= 3:
+                med = benchmarks.get("3_Year_Median", {}).get(k)
+                avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+                row.append(f"{med * 100:.1f}%" if (is_pct and med is not None) else (f"{med:.1f}" if (is_days and med is not None) else "-"))
+                row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+            elif n_years == 2:
+                avg = benchmarks.get("Historical_Average", benchmarks.get("5_Year_Average", {})).get(k)
+                row.append(f"{avg * 100:.1f}%" if (is_pct and avg is not None) else (f"{avg:.1f}" if (is_days and avg is not None) else "-"))
+            
+            drv_rows.append(row)
+
+        print("\n[HISTORICAL OPERATIONAL DRIVERS & RATIOS]")
+        if n_years >= 3:
+            headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
+        elif n_years == 2:
+            headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+        else:
+            headers_drv = ["Driver / Ratio", str(years[0])]
+
+        print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
 
 
 def run_interactive():
