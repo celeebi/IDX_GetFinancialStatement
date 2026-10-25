@@ -75,7 +75,18 @@ Generates a formatted workbook styled for financial presentation:
 
 ## Quick Start Guide
 
-### 1. Installation
+### Option A: 1-Click Automated Launcher (Windows — No Terminal Needed!)
+If you are on Windows and don't want to use the command line:
+1. Simply double-click **`run.bat`** in this project folder.
+2. The launcher automatically detects or creates the virtual environment and installs required libraries.
+3. Type the **Stock Ticker** (e.g. `BBCA`), **Start Year** (e.g. `2020`), and **End Year** (e.g. `2024`).
+4. Once finished, select **[1]** to open the output folder in Windows Explorer or **[2]** to immediately launch the generated Excel model!
+
+---
+
+### Option B: Terminal / CLI Setup (Linux, macOS, or Windows Power Users)
+
+#### 1. Installation
 Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/celeebi/IDX_GetFinancialStatement.git
