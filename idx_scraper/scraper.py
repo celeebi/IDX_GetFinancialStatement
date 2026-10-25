@@ -267,12 +267,12 @@ class IDXFinancialScraper:
             for z_path in zip_candidates:
                 if os.path.exists(z_path):
                     try:
-                        facts = XBRLParser.load_facts(z_path)
+                        facts, dei, contexts = XBRLParser.load_instance(z_path)
                         if facts:
                             if archetype == "banking":
-                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts, yr)
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts, yr, dei=dei)
                             else:
-                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, yr)
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, yr, dei=dei)
                             is_dict[yr] = is_stmt
                             bs_dict[yr] = bs_stmt
                             cf_dict[yr] = cf_stmt
@@ -281,6 +281,33 @@ class IDXFinancialScraper:
                             break
                     except Exception as e:
                         logger.warning(f"Failed to load XBRL for {ticker} {yr} from {z_path}: {e}")
+
+            if not xbrl_loaded:
+                # Check if next year's ZIP exists and can provide prior-year comparative data
+                next_yr = yr + 1
+                next_yr_dir = os.path.join(ticker_dir, str(next_yr))
+                next_zip_candidates = [
+                    os.path.join(next_yr_dir, "instance.zip"),
+                    os.path.join(next_yr_dir, f"instance-{next_yr}.zip"),
+                ]
+                for next_z in next_zip_candidates:
+                    if os.path.exists(next_z):
+                        try:
+                            facts_next, dei_next, _ = XBRLParser.load_instance(next_z)
+                            if facts_next:
+                                if archetype == "banking":
+                                    is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts_next, yr, dei=dei_next, period_target="prior")
+                                else:
+                                    is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts_next, yr, dei=dei_next, period_target="prior")
+                                if bs_stmt.total_assets > 0:
+                                    is_dict[yr] = is_stmt
+                                    bs_dict[yr] = bs_stmt
+                                    cf_dict[yr] = cf_stmt
+                                    xbrl_loaded = True
+                                    print(f"  [+] Year {yr}: Extracted from {next_yr} comparative XBRL data (BS Balance Check: {bs_stmt.balance_check:0.2f})")
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Failed prior-period comparative extraction from {next_z}: {e}")
 
             if not xbrl_loaded:
                 print(f"  [*] Year {yr}: Falling back to Excel waterfall resolution...")

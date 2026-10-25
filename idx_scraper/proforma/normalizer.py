@@ -545,15 +545,49 @@ class FinancialNormalizer:
 
         bs.marketable_securities = self._resolve_waterfall(
             df_bs,
-            primary_patterns=[r"^efek-efek\s*$", r"^surat berharga\s*$", r"^marketable securities\s*$"],
+            primary_patterns=[
+                r"^efek-efek yang diperdagangkan\s*$",
+                r"^efek-efek\s*$",
+                r"^surat berharga\s*$",
+                r"^marketable securities\s*$"
+            ],
             year_col=yr_str, scale=scale
         )
+        if bs.marketable_securities == 0.0:
+            sec_3rd = self._resolve_waterfall(df_bs, [r"^efek-efek yang diperdagangkan pihak ketiga"], yr_str, scale)
+            sec_rel = self._resolve_waterfall(df_bs, [r"^efek-efek yang diperdagangkan pihak berelasi"], yr_str, scale)
+            bs.marketable_securities = sec_3rd + sec_rel
 
         bs.gross_loans = self._resolve_waterfall(
             df_bs,
-            primary_patterns=[r"^kredit yang diberikan\s*$", r"^pinjaman yang diberikan\s*$", r"^loans\s*$"],
+            primary_patterns=[
+                r"^kredit yang diberikan\s*$",
+                r"^pinjaman yang diberikan\s*$",
+                r"^loans\s*$"
+            ],
             year_col=yr_str, scale=scale
         )
+        if bs.gross_loans == 0.0:
+            # Check Sharia financing line items (PSAK 101-107: Third parties + Related parties)
+            murabahah = (self._resolve_waterfall(df_bs, [r"^piutang murabahah pihak ketiga"], yr_str, scale) +
+                         self._resolve_waterfall(df_bs, [r"^piutang murabahah pihak berelasi"], yr_str, scale) or
+                         self._resolve_waterfall(df_bs, [r"^piutang murabahah\s*$"], yr_str, scale))
+            musyarakah = (self._resolve_waterfall(df_bs, [r"^pembiayaan musyarakah pihak ketiga"], yr_str, scale) +
+                          self._resolve_waterfall(df_bs, [r"^pembiayaan musyarakah pihak berelasi"], yr_str, scale) or
+                          self._resolve_waterfall(df_bs, [r"^pembiayaan musyarakah\s*$"], yr_str, scale))
+            qardh = (self._resolve_waterfall(df_bs, [r"^pinjaman qardh pihak ketiga"], yr_str, scale) +
+                     self._resolve_waterfall(df_bs, [r"^pinjaman qardh pihak berelasi"], yr_str, scale) or
+                     self._resolve_waterfall(df_bs, [r"^pinjaman qardh\s*$"], yr_str, scale))
+            mudharabah = (self._resolve_waterfall(df_bs, [r"^pembiayaan mudharabah pihak ketiga"], yr_str, scale) +
+                          self._resolve_waterfall(df_bs, [r"^pembiayaan mudharabah pihak berelasi"], yr_str, scale) or
+                          self._resolve_waterfall(df_bs, [r"^pembiayaan mudharabah\s*$"], yr_str, scale))
+            ijarah = (self._resolve_waterfall(df_bs, [r"^piutang ijarah pihak ketiga"], yr_str, scale) +
+                      self._resolve_waterfall(df_bs, [r"^piutang ijarah pihak berelasi"], yr_str, scale) or
+                      self._resolve_waterfall(df_bs, [r"^piutang ijarah\s*$"], yr_str, scale))
+            istishna = (self._resolve_waterfall(df_bs, [r"^piutang istishna pihak ketiga"], yr_str, scale) +
+                        self._resolve_waterfall(df_bs, [r"^piutang istishna pihak berelasi"], yr_str, scale) or
+                        self._resolve_waterfall(df_bs, [r"^piutang istishna\s*$"], yr_str, scale))
+            bs.gross_loans = murabahah + musyarakah + qardh + mudharabah + ijarah + istishna
 
         bs.allowance_impairment_loans = abs(self._resolve_waterfall(
             df_bs,
@@ -564,6 +598,14 @@ class FinancialNormalizer:
             ],
             year_col=yr_str, scale=scale
         ))
+        if bs.allowance_impairment_loans == 0.0:
+            ckpn_mur = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada piutang murabahah"], yr_str, scale)
+            ckpn_mus = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada pembiayaan musyarakah"], yr_str, scale)
+            ckpn_qar = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada pinjaman qardh"], yr_str, scale)
+            ckpn_mud = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada pembiayaan mudharabah"], yr_str, scale)
+            ckpn_ija = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada piutang ijarah"], yr_str, scale)
+            ckpn_ist = self._resolve_waterfall(df_bs, [r"^cadangan kerugian penurunan nilai pada piutang istishna"], yr_str, scale)
+            bs.allowance_impairment_loans = abs(ckpn_mur + ckpn_mus + ckpn_qar + ckpn_mud + ckpn_ija + ckpn_ist)
 
         bs.net_loans = max(0.0, bs.gross_loans - bs.allowance_impairment_loans)
         bs.total_earning_assets = bs.cash_and_placements_bi_banks + bs.marketable_securities + bs.net_loans
@@ -584,12 +626,31 @@ class FinancialNormalizer:
         bs.current_accounts = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^giro\s*$", r"^current accounts\s*$"], year_col=yr_str, scale=scale
         )
+        if bs.current_accounts == 0.0:
+            gw_3rd = self._resolve_waterfall(df_bs, [r"^giro wadiah pihak ketiga"], yr_str, scale)
+            gw_rel = self._resolve_waterfall(df_bs, [r"^giro wadiah pihak berelasi"], yr_str, scale)
+            gm_3rd = self._resolve_waterfall(df_bs, [r"^giro mudharabah pihak ketiga"], yr_str, scale)
+            gm_rel = self._resolve_waterfall(df_bs, [r"^giro (berjangka )?mudharabah pihak berelasi"], yr_str, scale)
+            bs.current_accounts = gw_3rd + gw_rel + gm_3rd + gm_rel
+
         bs.savings_deposits = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^tabungan\s*$", r"^savings deposits\s*$"], year_col=yr_str, scale=scale
         )
+        if bs.savings_deposits == 0.0:
+            tw_3rd = self._resolve_waterfall(df_bs, [r"^tabungan wadiah pihak ketiga"], yr_str, scale)
+            tw_rel = self._resolve_waterfall(df_bs, [r"^tabungan wadiah pihak berelasi"], yr_str, scale)
+            tm_3rd = self._resolve_waterfall(df_bs, [r"^tabungan mudharabah pihak ketiga"], yr_str, scale)
+            tm_rel = self._resolve_waterfall(df_bs, [r"^tabungan mudharabah pihak berelasi"], yr_str, scale)
+            bs.savings_deposits = tw_3rd + tw_rel + tm_3rd + tm_rel
+
         bs.time_deposits = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^deposito berjangka\s*$", r"^deposito\s*$", r"^time deposits\s*$"], year_col=yr_str, scale=scale
         )
+        if bs.time_deposits == 0.0:
+            dm_3rd = self._resolve_waterfall(df_bs, [r"^deposito berjangka mudharabah pihak ketiga"], yr_str, scale)
+            dm_rel = self._resolve_waterfall(df_bs, [r"^deposito berjangka mudharabah pihak berelasi"], yr_str, scale)
+            bs.time_deposits = dm_3rd + dm_rel
+
         bs.sharia_deposits = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^simpanan syariah\s*$", r"^sharia deposits\s*$"], year_col=yr_str, scale=scale
         )
@@ -603,10 +664,19 @@ class FinancialNormalizer:
         bs.deposits_from_other_banks = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^simpanan dari bank lain\s*$", r"^deposits from other banks\s*$"], year_col=yr_str, scale=scale
         )
+        if bs.deposits_from_other_banks == 0.0:
+            ob_rel = self._resolve_waterfall(df_bs, [r"^simpanan dari bank lain pihak berelasi"], yr_str, scale)
+            ob_3rd = self._resolve_waterfall(df_bs, [r"^simpanan dari bank lain pihak ketiga"], yr_str, scale)
+            bs.deposits_from_other_banks = ob_rel + ob_3rd
+
         bs.borrowings_issued_debt = self._resolve_waterfall(
             df_bs, primary_patterns=[r"^pinjaman yang diterima\s*$", r"^efek-efek yang diterbitkan\s*$", r"^surat berharga yang diterbitkan\s*$"],
             year_col=yr_str, scale=scale
         )
+        if bs.borrowings_issued_debt == 0.0:
+            bor_3rd = self._resolve_waterfall(df_bs, [r"^pinjaman yang diterima pihak ketiga"], yr_str, scale)
+            bor_rel = self._resolve_waterfall(df_bs, [r"^pinjaman yang diterima pihak berelasi"], yr_str, scale)
+            bs.borrowings_issued_debt = bor_3rd + bor_rel
 
         official_liab = self._resolve_waterfall(
             df_bs, [r"^jumlah liabilitas\s*$", r"^total liabilities\s*$"], year_col=yr_str, scale=scale
@@ -616,7 +686,8 @@ class FinancialNormalizer:
         )
         bs.temporary_syirkah_funds = syirkah_funds
 
-        sub_liab = bs.total_customer_deposits + bs.deposits_from_other_banks + bs.borrowings_issued_debt
+        dpk_in_liab = max(0.0, bs.total_customer_deposits - bs.temporary_syirkah_funds) if bs.temporary_syirkah_funds > 0 else bs.total_customer_deposits
+        sub_liab = dpk_in_liab + bs.deposits_from_other_banks + bs.borrowings_issued_debt
         if official_liab > 0:
             bs.total_liabilities = official_liab
             bs.other_liabilities = max(0.0, bs.total_liabilities - sub_liab)
