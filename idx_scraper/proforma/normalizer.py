@@ -487,6 +487,34 @@ class FinancialNormalizer:
         )
         cf.dividends_paid = abs(cf.dividends_paid)
 
+        # Net Debt Issued / (Repaid)
+        proceeds_debt = self._resolve_waterfall(
+            df_cf,
+            primary_patterns=[
+                r"penerimaan.*pinjaman bank\b",
+                r"penerimaan utang bank\b",
+                r"penerimaan dari pinjaman\b",
+                r"penerimaan pinjaman\b",
+                r"penerimaan utang obligasi\b",
+                r"proceeds from.*borrowings\b",
+                r"proceeds from.*bank loans\b"
+            ],
+            year_col=yr_str, scale=scale
+        )
+        payments_debt = abs(self._resolve_waterfall(
+            df_cf,
+            primary_patterns=[
+                r"pembayaran.*pinjaman bank\b",
+                r"pembayaran utang bank\b",
+                r"pembayaran pinjaman\b",
+                r"pembayaran utang obligasi\b",
+                r"repayments of.*borrowings\b",
+                r"payments of.*bank loans\b"
+            ],
+            year_col=yr_str, scale=scale
+        ))
+        cf.net_debt_change = proceeds_debt - payments_debt
+
         # Financing Cash Flow
         cf.financing_cash_flow = self._resolve_waterfall(
             df_cf,
@@ -779,7 +807,13 @@ class FinancialNormalizer:
             df_cf, primary_patterns=[r"arus kas.*aktivitas operasi\b", r"operating activities\b"], year_col=yr_str, scale=scale
         )
         cf.capex = abs(self._resolve_waterfall(
-            df_cf, primary_patterns=[r"perolehan aset tetap\b", r"acquisition of property\b"], year_col=yr_str, scale=scale
+            df_cf, primary_patterns=[
+                r"penerimaan dari penjualan \(perolehan\) aset tetap\b",
+                r"penambahan aset tetap\b",
+                r"perolehan aset tetap\b",
+                r"acquisition of property\b"
+            ],
+            year_col=yr_str, scale=scale
         ))
         cf.investing_cash_flow = self._resolve_waterfall(
             df_cf, primary_patterns=[r"arus kas.*aktivitas investasi\b", r"investing activities\b"], year_col=yr_str, scale=scale
@@ -787,6 +821,20 @@ class FinancialNormalizer:
         cf.dividends_paid = abs(self._resolve_waterfall(
             df_cf, primary_patterns=[r"pembayaran dividen\b", r"dividends paid\b"], year_col=yr_str, scale=scale
         ))
+
+        # Net Debt Issued / (Repaid)
+        proceeds_debt = (
+            self._resolve_waterfall(df_cf, [r"penerimaan pinjaman yang diterima\b"], yr_str, scale) +
+            self._resolve_waterfall(df_cf, [r"penerbitan sukuk mudharabah\b"], yr_str, scale) +
+            self._resolve_waterfall(df_cf, [r"penerimaan pinjaman subordinasi\b"], yr_str, scale)
+        )
+        payments_debt = abs(
+            self._resolve_waterfall(df_cf, [r"pembayaran pinjaman yang diterima\b"], yr_str, scale) +
+            self._resolve_waterfall(df_cf, [r"pembayaran pinjaman subordinasi\b"], yr_str, scale) +
+            self._resolve_waterfall(df_cf, [r"pembayaran utang obligasi\b"], yr_str, scale)
+        )
+        cf.net_debt_change = proceeds_debt - payments_debt
+
         cf.financing_cash_flow = self._resolve_waterfall(
             df_cf, primary_patterns=[r"arus kas.*aktivitas pendanaan\b", r"financing activities\b"], year_col=yr_str, scale=scale
         )

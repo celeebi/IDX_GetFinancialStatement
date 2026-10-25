@@ -442,11 +442,12 @@ class XBRLParser:
                g_dur("NetCashFlowsFromUsedInOperatingActivities") or
                g_dur("CashFlowsFromUsedInOperatingActivities")) / m
 
-        capex = (g_dur("PaymentsForAcquisitionOfPropertyPlantAndEquipment") or 
-                 g_dur("PaymentsForAcquisitionOfPropertyAndEquipment") or 
-                 g_dur("PaymentsToAcquirePropertyPlantAndEquipment") or 
-                 g_dur("PaymentsForPurchaseOfPropertyPlantAndEquipment") or 
-                 g_dur("PurchaseOfPropertyPlantAndEquipment")) / m
+        capex = abs(g_dur("PaymentsForAcquisitionOfPropertyPlantAndEquipment") or 
+                    g_dur("PaymentsForAcquisitionOfPropertyAndEquipment") or 
+                    g_dur("PaymentsToAcquirePropertyPlantAndEquipment") or 
+                    g_dur("PaymentsForPurchaseOfPropertyPlantAndEquipment") or 
+                    g_dur("PurchaseOfPropertyPlantAndEquipment") or
+                    g_dur("AdditionInPropertyPlantAndEquipment")) / m
 
         cfi = (g_dur("NetCashFlowsReceivedFromUsedInInvestingActivities") or 
                g_dur("NetCashFlowsFromUsedInInvestingActivities") or 
@@ -457,8 +458,22 @@ class XBRLParser:
                 g_dur("DividendsPaid") or 
                 g_dur("PaymentsOfDividends")) / m
 
+        debt_proceeds = (g_dur("ProceedsFromBankLoans") + 
+                         g_dur("ProceedsFromBondsPayable") + 
+                         g_dur("ProceedsFromBorrowings") + 
+                         g_dur("ProceedsFromShortTermLoans") + 
+                         g_dur("ProceedsFromLongTermLoans") + 
+                         g_dur("ProceedsFromOtherBorrowings"))
+        debt_payments = (g_dur("PaymentsOfBankLoans") + 
+                         g_dur("PaymentsOfBondsPayable") + 
+                         g_dur("PaymentsForBorrowings") + 
+                         g_dur("PaymentsOfShortTermLoans") + 
+                         g_dur("PaymentsOfLongTermLoans") + 
+                         g_dur("PaymentsOfOtherBorrowings"))
+        net_debt = (debt_proceeds - debt_payments) / m
+
         cff = (g_dur("NetCashFlowsReceivedFromUsedInFinancingActivities") or 
-               g_dur("NetCashFlowsFromUsedInFinancingActivities") or
+               g_dur("NetCashFlowsFromUsedInFinancingActivities") or 
                g_dur("CashFlowsFromUsedInFinancingActivities")) / m
 
         net_cash_change = (g_dur("NetIncreaseDecreaseInCashAndCashEquivalents") or (ocf + cfi + cff)) / m
@@ -471,7 +486,7 @@ class XBRLParser:
             capex=capex,
             investing_cash_flow=cfi,
             dividends_paid=divs,
-            net_debt_change=0.0,
+            net_debt_change=net_debt,
             financing_cash_flow=cff,
             net_change_in_cash=net_cash_change,
             beginning_cash=beg_cash,
@@ -778,10 +793,12 @@ class XBRLParser:
                g_dur("NetCashFlowsFromUsedInOperatingActivities") or
                g_dur("CashFlowsFromUsedInOperatingActivities")) / m
 
-        capex = (g_dur("PaymentsForAcquisitionOfPropertyPlantAndEquipment") or 
-                 g_dur("PaymentsForAcquisitionOfPropertyAndEquipment") or 
-                 g_dur("PaymentsToAcquirePropertyPlantAndEquipment") or 
-                 g_dur("PurchaseOfPropertyPlantAndEquipment")) / m
+        capex = abs(g_dur("AdditionInPropertyPlantAndEquipment") or 
+                    g_dur("ProceedsFromDisposalAcquisitionOfPropertyAndEquipment") or
+                    g_dur("PaymentsForAcquisitionOfPropertyPlantAndEquipment") or 
+                    g_dur("PaymentsForAcquisitionOfPropertyAndEquipment") or 
+                    g_dur("PaymentsToAcquirePropertyPlantAndEquipment") or 
+                    g_dur("PurchaseOfPropertyPlantAndEquipment")) / m
 
         cfi = (g_dur("NetCashFlowsReceivedFromUsedInInvestingActivities") or 
                g_dur("NetCashFlowsFromUsedInInvestingActivities") or 
@@ -792,8 +809,20 @@ class XBRLParser:
                 g_dur("DividendsPaid") or 
                 g_dur("PaymentsOfDividends")) / m
 
+        debt_proceeds = (g_dur("ProceedsFromBorrowings") + 
+                         g_dur("ProceedsFromBondsIssuance") + 
+                         g_dur("ProceedsFromSubordinatedLoans") + 
+                         g_dur("IssuanceOfMudharabahSukuk") + 
+                         g_dur("ProceedsFromSecuritiesIssued"))
+        debt_payments = (g_dur("PaymentsForBorrowings") + 
+                         g_dur("PaymentsOfBondsPayable") + 
+                         g_dur("PaymentsOfSubordinatedLoans") + 
+                         g_dur("PaymentsOfSubordinatedBonds") + 
+                         g_dur("RedemptionOfMudharabahSukuk"))
+        net_debt = (debt_proceeds - debt_payments) / m
+
         cff = (g_dur("NetCashFlowsReceivedFromUsedInFinancingActivities") or 
-               g_dur("NetCashFlowsFromUsedInFinancingActivities") or
+               g_dur("NetCashFlowsFromUsedInFinancingActivities") or 
                g_dur("CashFlowsFromUsedInFinancingActivities")) / m
 
         net_cash_change = (g_dur("NetIncreaseDecreaseInCashAndCashEquivalents") or (ocf + cfi + cff)) / m
@@ -808,7 +837,7 @@ class XBRLParser:
             capex=capex,
             investing_cash_flow=cfi,
             dividends_paid=divs,
-            net_debt_change=0.0,
+            net_debt_change=net_debt,
             financing_cash_flow=cff,
             net_change_in_cash=net_cash_change,
             beginning_cash=beg_cash,
