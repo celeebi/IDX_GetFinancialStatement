@@ -3,6 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Windows | Linux | macOS](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
+[![Author: abas YP74A](https://img.shields.io/badge/Author-abas%20YP74A-blue.svg)]()
 
 An automated financial statement scraper, sector-aware normalizer, and operational driver engine for **PT Bursa Efek Indonesia (Indonesia Stock Exchange / IDX - `idx.co.id`)**.
 
@@ -201,6 +202,12 @@ For technical contributors and developers interested in the underlying pipeline:
 - **Primary XBRL Ingestion**: The engine directly reads the raw `instance.xbrl` document from IDX's filing package. XBRL concepts carry fixed semantic tags (e.g. `SalesAndRevenue`, `TotalInterestAndShariaIncome`, `Assets`), completely bypassing Excel spacing changes, cell shifts, or UI language differences.
 - **Anti-Bot Handling**: IDX's portal uses Cloudflare Turnstile protection. Requests are executed through `curl_cffi` using browser TLS fingerprint simulation (`impersonate="chrome131"`) and automatic retry backoff, ensuring uninterrupted data extraction.
 - **Unit Normalization**: Detects filing scale metadata (`Satuan Penuh`, `Ribuan`, `Jutaan`, `Miliaran`) and converts all statements into a consistent **Millions IDR** denomination.
+
+---
+
+## Author & Credits
+
+This program was created and developed by **abas YP74A**.
 
 ---
 

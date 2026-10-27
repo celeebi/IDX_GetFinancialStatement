@@ -237,8 +237,9 @@ class IDXFinancialScraper:
             is_multi = merge_statement_tables(parsed_reports, "income_statement")
             cf_multi = merge_statement_tables(parsed_reports, "cash_flow")
 
-            # Collect latest general info
+            # Collect latest general info and add author credit
             latest_info = parsed_reports[-1].get("general_info", {})
+            latest_info["Program Author / Developer"] = "abas YP74A"
             info_df = pd.DataFrame(list(latest_info.items()), columns=["Field", "Value"])
 
             compiled_excel_name = f"{ticker}_financial_statements_{year_slug}.xlsx"
@@ -253,6 +254,9 @@ class IDXFinancialScraper:
                     cf_multi.to_excel(writer, sheet_name="Cash_Flow", index=False)
                 if not info_df.empty:
                     info_df.to_excel(writer, sheet_name="General_Info", index=False)
+                writer.book.properties.creator = "abas YP74A"
+                writer.book.properties.lastModifiedBy = "abas YP74A"
+                writer.book.properties.description = "Compiled IDX Financial Statements by abas YP74A"
 
             print(f"[OK] Successfully compiled multi-year workbook: {compiled_excel_path}")
 
@@ -660,6 +664,7 @@ class IDXFinancialScraper:
                 cf_multi = merge_statement_tables(parsed_reports, "cash_flow")
 
                 latest_info = parsed_reports[-1].get("general_info", {})
+                latest_info["Program Author / Developer"] = "abas YP74A"
                 info_df = pd.DataFrame(list(latest_info.items()), columns=["Field", "Value"])
 
                 compiled_excel_name = f"{ticker}_financial_statements_{year_slug}.xlsx"
@@ -674,6 +679,9 @@ class IDXFinancialScraper:
                         cf_multi.to_excel(writer, sheet_name="Cash_Flow", index=False)
                     if not info_df.empty:
                         info_df.to_excel(writer, sheet_name="General_Info", index=False)
+                    writer.book.properties.creator = "abas YP74A"
+                    writer.book.properties.lastModifiedBy = "abas YP74A"
+                    writer.book.properties.description = "Compiled IDX Financial Statements by abas YP74A"
 
                 print(f"[OK] Successfully compiled raw multi-year workbook: {compiled_excel_path}")
                 if os.path.abspath(scan_root) != os.path.abspath(ticker_dir):

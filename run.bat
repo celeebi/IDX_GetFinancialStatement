@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 
 :: Anchor working directory to project root
 cd /d "%~dp0"
-title IDX Financial Statement and Ready-to-Forecast Model Launcher
+title IDX Financial Statement and Ready-to-Forecast Model Launcher - by abas YP74A
 
 :: -----------------------------------------------------------------------------
 :: Step 1: Detect Python & Virtual Environment
@@ -55,6 +55,7 @@ cls
 echo ========================================================================
 echo      IDX FINANCIAL STATEMENT AND READY-TO-FORECAST MODEL LAUNCHER
 echo            PT Bursa Efek Indonesia (idx.co.id) Automation
+echo                        Created by: abas YP74A
 echo ========================================================================
 echo.
 echo Select Mode:
@@ -245,6 +246,9 @@ goto :post_menu
 
 :exit_app
 echo.
-echo Thank you for using IDX Financial Statement and Modeling Engine!
+echo ========================================================================
+echo  Thank you for using IDX Financial Statement & Modeling Engine!
+echo  Created by: abas YP74A
+echo ========================================================================
 ping 127.0.0.1 -n 2 >nul
 exit /b 0

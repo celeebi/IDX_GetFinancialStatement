@@ -26,6 +26,7 @@ def print_banner():
     print("=" * 72)
     print("     IDX FINANCIAL STATEMENT & READY-TO-FORECAST MODELING ENGINE     ")
     print("           PT Bursa Efek Indonesia (idx.co.id) Automation            ")
+    print("                       Created by: abas YP74A                         ")
     print("=" * 72)
 
 
@@ -333,6 +334,11 @@ def run_interactive():
 
 def main():
     parser = argparse.ArgumentParser(description="IDX Financial Statement Scraper & Ready-to-Forecast Engine")
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version="IDX Financial Statement & Ready-to-Forecast Modeling Engine v1.0.0 (Created by: abas YP74A)"
+    )
     parser.add_argument("-t", "--ticker", type=str, help="Stock ticker code (e.g., TLKM, BBCA, ASII)")
     parser.add_argument("-y", "--year", type=int, help="Extract a single specific year (e.g. 2023)")
     parser.add_argument("--years", type=str, help="Year specification: single (2023), range (2020-2023), list (2020,2022,2024), or 'all'")
