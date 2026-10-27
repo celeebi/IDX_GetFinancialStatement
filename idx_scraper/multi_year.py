@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 import re
 import pandas as pd
 import logging
+from .year_utils import period_sort_key
 
 logger = logging.getLogger("idx_scraper.multi_year")
 
@@ -40,12 +41,13 @@ def merge_statement_tables(parsed_reports: List[Dict[str, Any]], statement_type:
     if not parsed_reports:
         return pd.DataFrame()
 
-    # Collect all items and their yearly values
+    # Collect all items and their yearly/period values
     master_items: Dict[str, Dict[str, Any]] = {}
-    years_found = set()
+    periods_found = set()
 
     for report in parsed_reports:
         report_year = report.get("year")
+        period_key = report.get("period_key") or (str(report_year) if report_year else None)
         df: pd.DataFrame = report.get(statement_type, pd.DataFrame())
         if df.empty or "Item_ID" not in df.columns:
             continue
@@ -69,24 +71,29 @@ def merge_statement_tables(parsed_reports: List[Dict[str, Any]], statement_type:
 
             for col in value_cols:
                 val = row[col]
-                yr = extract_year_from_column_header(col, report_year=report_year)
-                if yr and pd.notna(val):
-                    years_found.add(yr)
-                    # Latest filings have audited restatements, so update with the most recent report's value
-                    master_items[item_id]["values_by_year"][yr] = val
+                # If report has explicit interim period key (e.g. 2025-Q2)
+                if period_key and ("-q" in str(period_key).lower() or "_tw" in str(period_key).lower()):
+                    p_target = period_key
+                else:
+                    yr = extract_year_from_column_header(col, report_year=report_year)
+                    p_target = str(yr) if yr else None
+
+                if p_target and pd.notna(val):
+                    periods_found.add(p_target)
+                    master_items[item_id]["values_by_year"][p_target] = val
 
     if not master_items:
         return pd.DataFrame()
 
-    sorted_years = sorted(list(years_found))
+    sorted_periods = sorted(list(periods_found), key=period_sort_key)
     rows = []
     for item_data in master_items.values():
         row_dict = {
             "Item_ID": item_data["Item_ID"],
             "Item_EN": item_data["Item_EN"]
         }
-        for yr in sorted_years:
-            row_dict[str(yr)] = item_data["values_by_year"].get(yr, None)
+        for p in sorted_periods:
+            row_dict[str(p)] = item_data["values_by_year"].get(p, None)
         rows.append(row_dict)
 
     result_df = pd.DataFrame(rows)

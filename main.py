@@ -19,7 +19,7 @@ if hasattr(sys.stderr, "reconfigure"):
 from idx_scraper.client import IDXClient
 from idx_scraper.api import IDXApi
 from idx_scraper.scraper import IDXFinancialScraper
-from idx_scraper.year_utils import parse_year_input, format_year_range_label
+from idx_scraper.year_utils import parse_year_input, format_year_range_label, format_period_label
 
 
 def print_banner():
@@ -59,12 +59,12 @@ def display_ready_to_forecast_summary(res: dict):
         for k in is_keys:
             row = [k]
             for y in years:
-                v = is_dict.get(y).to_dict().get(k, 0.0)
+                v = is_dict.get(y).to_dict().get(k, 0.0) if is_dict.get(y) else 0.0
                 row.append(f"{v:,.0f}" if v is not None else "-")
             is_rows.append(row)
 
         print("\n[NORMALIZED BANKING INCOME STATEMENT - Millions IDR]")
-        headers_is = ["Metric"] + [str(y) for y in years]
+        headers_is = ["Metric"] + [format_period_label(y) for y in years]
         print(tabulate(is_rows, headers=headers_is, tablefmt="fancy_grid"))
 
         # 2. Banking Balance Sheet
@@ -81,7 +81,7 @@ def display_ready_to_forecast_summary(res: dict):
         for k in bs_keys:
             row = [k]
             for y in years:
-                v = bs_dict.get(y).to_dict().get(k, 0.0)
+                v = bs_dict.get(y).to_dict().get(k, 0.0) if bs_dict.get(y) else 0.0
                 if "BALANCE CHECK" in k:
                     status = "OK (0.0)" if abs(v) < 0.05 else f"DIFF ({v:,.1f})"
                     row.append(status)
@@ -90,7 +90,7 @@ def display_ready_to_forecast_summary(res: dict):
             bs_rows.append(row)
 
         print("\n[NORMALIZED BANKING BALANCE SHEET - Millions IDR]")
-        headers_bs = ["Metric"] + [str(y) for y in years]
+        headers_bs = ["Metric"] + [format_period_label(y) for y in years]
         print(tabulate(bs_rows, headers=headers_bs, tablefmt="fancy_grid"))
 
         # 3. Banking Operational Ratios & Drivers
@@ -115,7 +115,7 @@ def display_ready_to_forecast_summary(res: dict):
         for k in drv_keys:
             row = [k]
             for y in years:
-                v = drivers_by_year.get(y).to_dict().get(k)
+                v = drivers_by_year.get(y).to_dict().get(k) if drivers_by_year.get(y) else None
                 if v is not None:
                     row.append(f"{v * 100:.2f}%")
                 else:
@@ -134,11 +134,11 @@ def display_ready_to_forecast_summary(res: dict):
 
         print("\n[HISTORICAL BANKING DRIVERS & FINANCIAL RATIOS]")
         if n_years >= 3:
-            headers_drv = ["Banking Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
+            headers_drv = ["Banking Driver / Ratio"] + [format_period_label(y) for y in years] + ["3-Yr Median", "Average"]
         elif n_years == 2:
-            headers_drv = ["Banking Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+            headers_drv = ["Banking Driver / Ratio"] + [format_period_label(y) for y in years] + ["Average"]
         else:
-            headers_drv = ["Banking Driver / Ratio", str(years[0])]
+            headers_drv = ["Banking Driver / Ratio", format_period_label(years[0])]
 
         print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
 
@@ -153,12 +153,12 @@ def display_ready_to_forecast_summary(res: dict):
         for k in is_keys:
             row = [k]
             for y in years:
-                v = is_dict.get(y).to_dict().get(k, 0.0)
+                v = is_dict.get(y).to_dict().get(k, 0.0) if is_dict.get(y) else 0.0
                 row.append(f"{v:,.0f}" if v is not None else "-")
             is_rows.append(row)
 
         print("\n[NORMALIZED INCOME STATEMENT - Millions IDR]")
-        headers_is = ["Metric"] + [str(y) for y in years]
+        headers_is = ["Metric"] + [format_period_label(y) for y in years]
         print(tabulate(is_rows, headers=headers_is, tablefmt="fancy_grid"))
 
         # 2. Balance Sheet Highlights
@@ -173,7 +173,7 @@ def display_ready_to_forecast_summary(res: dict):
         for k in bs_keys:
             row = [k]
             for y in years:
-                v = bs_dict.get(y).to_dict().get(k, 0.0)
+                v = bs_dict.get(y).to_dict().get(k, 0.0) if bs_dict.get(y) else 0.0
                 if "BALANCE CHECK" in k:
                     status = "OK (0.0)" if abs(v) < 0.05 else f"DIFF ({v:,.1f})"
                     row.append(status)
@@ -182,7 +182,7 @@ def display_ready_to_forecast_summary(res: dict):
             bs_rows.append(row)
 
         print("\n[NORMALIZED BALANCE SHEET - Millions IDR]")
-        headers_bs = ["Metric"] + [str(y) for y in years]
+        headers_bs = ["Metric"] + [format_period_label(y) for y in years]
         print(tabulate(bs_rows, headers=headers_bs, tablefmt="fancy_grid"))
 
         # 3. Operational Forecasting Drivers
@@ -207,7 +207,7 @@ def display_ready_to_forecast_summary(res: dict):
         for k, is_pct, is_days in drv_keys:
             row = [k]
             for y in years:
-                v = drivers_by_year.get(y).to_dict().get(k)
+                v = drivers_by_year.get(y).to_dict().get(k) if drivers_by_year.get(y) else None
                 if v is not None:
                     row.append(f"{v * 100:.1f}%" if is_pct else (f"{v:.1f}" if is_days else f"{v:.2f}"))
                 else:
@@ -227,11 +227,11 @@ def display_ready_to_forecast_summary(res: dict):
 
         print("\n[HISTORICAL OPERATIONAL DRIVERS & RATIOS]")
         if n_years >= 3:
-            headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["3-Yr Median", "Average"]
+            headers_drv = ["Driver / Ratio"] + [format_period_label(y) for y in years] + ["3-Yr Median", "Average"]
         elif n_years == 2:
-            headers_drv = ["Driver / Ratio"] + [str(y) for y in years] + ["Average"]
+            headers_drv = ["Driver / Ratio"] + [format_period_label(y) for y in years] + ["Average"]
         else:
-            headers_drv = ["Driver / Ratio", str(years[0])]
+            headers_drv = ["Driver / Ratio", format_period_label(years[0])]
 
         print(tabulate(drv_rows, headers=headers_drv, tablefmt="fancy_grid"))
 
@@ -239,16 +239,17 @@ def display_ready_to_forecast_summary(res: dict):
 def run_interactive():
     print_banner()
     print("Select Mode:")
-    print("  [1] Auto-Fetch from IDX (Online - Enter Ticker & Years)")
-    print("  [2] Process Local Folder (Offline - Drag & Drop Folder with .xlsx / .zip)")
+    print("  [1] Auto-Fetch Latest 5 Years + Interim Quarters (Recommended)")
+    print("  [2] Custom Online Ticker Search (Enter Specific Years / Range)")
+    print("  [3] Process Local Folder (Offline - Drag & Drop Folder with .xlsx / .zip)")
     print("  [Q] Quit")
-    mode_choice = input("\nChoice [1/2/Q, default: 1]: ").strip().lower()
+    mode_choice = input("\nChoice [1/2/3/Q, default: 1]: ").strip().lower()
 
     if mode_choice in ("q", "quit", "exit"):
         print("Exiting.")
         sys.exit(0)
 
-    if mode_choice == "2":
+    if mode_choice == "3":
         folder_input = input("\nEnter Folder Path (or drag and drop folder here): ").strip().strip('"').strip("'")
         if not folder_input:
             print("[-] Folder path cannot be empty.")
@@ -266,6 +267,40 @@ def run_interactive():
 
     api = IDXApi()
 
+    if mode_choice in ("1", ""):
+        while True:
+            ticker_input = input("\nEnter Stock Ticker (e.g. BBCA, TLKM, ASII, BBRI) or 'list' / 'q' to quit: ").strip()
+            if not ticker_input:
+                continue
+            if ticker_input.lower() in ("q", "quit", "exit"):
+                print("Exiting.")
+                sys.exit(0)
+
+            if ticker_input.lower() == "list":
+                emitens = api.get_emitens()
+                print(f"\n[+] Total Active Emitens: {len(emitens)}")
+                search_term = input("Filter by keyword (press Enter for first 20): ").strip()
+                filtered = api.search_emiten(search_term) if search_term else emitens[:20]
+                table_data = [[e["KodeEmiten"], e["NamaEmiten"]] for e in filtered[:25]]
+                print(tabulate(table_data, headers=["Ticker", "Company Name"], tablefmt="simple"))
+                continue
+
+            ticker = ticker_input.upper()
+            matches = api.search_emiten(ticker)
+            matched = next((m for m in matches if m["KodeEmiten"].upper() == ticker), None)
+            if matched:
+                print(f"[+] Found: {matched['KodeEmiten']} - {matched['NamaEmiten']}")
+            else:
+                print(f"[!] Warning: Ticker '{ticker}' not found in active emiten list, continuing anyway...")
+
+            scraper = IDXFinancialScraper(output_dir="downloads", client=api.client)
+            res = scraper.build_latest_ready_to_forecast(ticker=ticker)
+            if res.get("status") == "success":
+                display_ready_to_forecast_summary(res)
+                print(f"\n[OK] Ready-to-Forecast workbook saved to:\n     {os.path.abspath(res['ready_excel'])}\n")
+            return
+
+    # mode_choice == "2": Custom Online Ticker Search
     while True:
         ticker_input = input("\nEnter Stock Ticker (e.g. BBCA, TLKM, ASII, BBRI) or 'list' / 'q' to quit: ").strip()
         if not ticker_input:
@@ -285,7 +320,6 @@ def run_interactive():
 
         ticker = ticker_input.upper()
         
-        # Verify ticker exists
         matches = api.search_emiten(ticker)
         matched = next((m for m in matches if m["KodeEmiten"].upper() == ticker), None)
         if matched:
@@ -330,6 +364,7 @@ def run_interactive():
             )
             if res.get("compiled_excel"):
                 print(f"\n[OK] Raw compiled workbook saved to:\n     {os.path.abspath(res['compiled_excel'])}\n")
+        return
 
 
 def main():
@@ -340,6 +375,7 @@ def main():
         version="IDX Financial Statement & Ready-to-Forecast Modeling Engine v1.0.0 (Created by: abas YP74A)"
     )
     parser.add_argument("-t", "--ticker", type=str, help="Stock ticker code (e.g., TLKM, BBCA, ASII)")
+    parser.add_argument("--latest-interim", "--latest", "--with-interim", action="store_true", help="Auto-probe latest 5 completed annual years + all published interim quarters")
     parser.add_argument("-y", "--year", type=int, help="Extract a single specific year (e.g. 2023)")
     parser.add_argument("--years", type=str, help="Year specification: single (2023), range (2020-2023), list (2020,2022,2024), or 'all'")
     parser.add_argument("--all", action="store_true", help="Probe and extract all available historical filing years on IDX")
@@ -390,6 +426,13 @@ def main():
         print_banner()
         api = IDXApi()
         scraper = IDXFinancialScraper(output_dir=args.output_dir, client=api.client)
+
+        if args.latest_interim:
+            res = scraper.build_latest_ready_to_forecast(ticker=args.ticker)
+            if res.get("status") == "success":
+                display_ready_to_forecast_summary(res)
+                print(f"\n[OK] Ready-to-Forecast workbook saved to:\n     {os.path.abspath(res['ready_excel'])}")
+            return
 
         # Resolve requested years
         years_to_use = None

@@ -59,19 +59,54 @@ echo                        Created by: abas YP74A
 echo ========================================================================
 echo.
 echo Select Mode:
-echo   [1] Auto-Fetch from IDX (Online - Enter Ticker and Years)
-echo   [2] Process Local Folder (Offline - Drag & Drop Folder with .xlsx/.zip)
+echo   [1] Auto-Fetch Latest 5 Years + Interim Quarters (Recommended)
+echo   [2] Custom Online Ticker Search (Enter Specific Years / Range)
+echo   [3] Process Local Folder (Offline - Drag & Drop Folder with .xlsx/.zip)
 echo   [Q] Quit
 echo.
 set "MODE="
-set /p "MODE=Enter choice [1, 2, or Q, Default: 1]: "
+set /p "MODE=Enter choice [1, 2, 3, or Q, Default: 1]: "
 if "!MODE!"=="" set "MODE=1"
 
 if /i "!MODE!"=="Q" goto :exit_app
 if /i "!MODE!"=="QUIT" goto :exit_app
 if /i "!MODE!"=="EXIT" goto :exit_app
 
-if "!MODE!"=="2" goto :offline_folder_mode
+if "!MODE!"=="1" goto :auto_latest_mode
+if "!MODE!"=="2" goto :ask_ticker
+if "!MODE!"=="3" goto :offline_folder_mode
+
+:auto_latest_mode
+echo.
+set "TICKER="
+set /p "TICKER=Enter Stock Ticker (e.g. BBCA, TLKM, ASII, BBRI) or 'Q' to return: "
+
+if "!TICKER!"=="" (
+    echo [!] Ticker cannot be empty. Please try again.
+    goto :auto_latest_mode
+)
+
+if /i "!TICKER!"=="Q" goto :main_loop
+if /i "!TICKER!"=="QUIT" goto :main_loop
+if /i "!TICKER!"=="EXIT" goto :main_loop
+
+set "TICKER=!TICKER: =!"
+set "LAST_TARGET_DIR=%~dp0downloads\!TICKER!"
+
+echo.
+echo ========================================================================
+echo  Target: !TICKER! ^| Dynamic Horizon Case A
+echo  Probing Latest 5 Completed Annual Years + Available Interim Quarters...
+echo ========================================================================
+echo.
+
+"%PYTHON_EXEC%" "%~dp0main.py" --ticker "!TICKER!" --latest-interim --ready-to-forecast
+
+if %errorlevel% neq 0 (
+    echo.
+    echo [!] Process completed with warnings or errors. Check output above.
+)
+goto :post_menu
 
 :ask_ticker
 echo.

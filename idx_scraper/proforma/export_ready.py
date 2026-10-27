@@ -20,6 +20,7 @@ from .schema import (
     BankingIS, BankingBS, BankingCF, BankingDrivers
 )
 from .drivers import DriverCalculator, BankingDriverCalculator
+from ..year_utils import period_sort_key, format_period_label
 
 logger = logging.getLogger("idx_scraper.proforma.export_ready")
 
@@ -68,7 +69,7 @@ class ReadyToForecastExporter:
         os.makedirs(os.path.dirname(os.path.abspath(dest_path)), exist_ok=True)
         wb = openpyxl.Workbook()
 
-        sorted_years = sorted(years)
+        sorted_years = sorted(years, key=period_sort_key)
         if archetype == "banking":
             benchmarks = BankingDriverCalculator.build_summary_benchmarks(drivers_by_year)
         else:
@@ -208,7 +209,7 @@ class ReadyToForecastExporter:
         ws.cell(row=header_row, column=1).alignment = Alignment(horizontal="left", vertical="center")
 
         for col_idx, yr in enumerate(years, start=2):
-            c = ws.cell(row=header_row, column=col_idx, value=yr)
+            c = ws.cell(row=header_row, column=col_idx, value=format_period_label(yr))
             c.font = cls.FONT_HEADER
             c.fill = cls.NAVY_HEADER
             c.alignment = Alignment(horizontal="right", vertical="center")
@@ -291,7 +292,7 @@ class ReadyToForecastExporter:
                 ("Historical Average", "Historical_Average", cls.ACCENT_FILL)
             ]
 
-        headers = ["Operational Driver / Ratio"] + [str(y) for y in years] + [b[0] for b in benchmark_cols]
+        headers = ["Operational Driver / Ratio"] + [format_period_label(y) for y in years] + [b[0] for b in benchmark_cols]
 
         for col_idx, h_text in enumerate(headers, start=1):
             c = ws.cell(row=header_row, column=col_idx, value=h_text)

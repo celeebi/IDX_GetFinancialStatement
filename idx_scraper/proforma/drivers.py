@@ -5,8 +5,10 @@ Capex intensity, D&A rates, and statistical benchmarks (3-Year Median, 5-Year Av
 """
 
 from typing import Dict, Any, List, Optional
+import re
 import statistics
 import pandas as pd
+from ..year_utils import period_sort_key, is_annual_period
 
 from .schema import (
     NormalizedIS, NormalizedBS, NormalizedCF, OperationalDrivers,
@@ -26,7 +28,7 @@ class DriverCalculator:
     ) -> Dict[int, OperationalDrivers]:
         """Compute operational drivers for each year."""
         drivers_by_year: Dict[int, OperationalDrivers] = {}
-        sorted_years = sorted(years)
+        sorted_years = sorted(years, key=period_sort_key)
 
         for idx, yr in enumerate(sorted_years):
             d = OperationalDrivers()
@@ -37,12 +39,16 @@ class DriverCalculator:
             rev = is_stmt.revenue
             cogs = is_stmt.cogs
 
+            m_q = re.match(r"^(\d{4})[-_]?(?:q|tw)(\d)", str(yr), re.IGNORECASE)
+            days_in_period = (int(m_q.group(2)) * 91.25) if m_q else 365.0
+
             # 1. Revenue Growth YoY
             if idx > 0:
                 prev_yr = sorted_years[idx - 1]
-                prev_rev = is_dict.get(prev_yr, NormalizedIS()).revenue
-                if prev_rev > 0:
-                    d.revenue_growth_yoy = (rev - prev_rev) / prev_rev
+                if is_annual_period(yr) == is_annual_period(prev_yr):
+                    prev_rev = is_dict.get(prev_yr, NormalizedIS()).revenue
+                    if prev_rev > 0:
+                        d.revenue_growth_yoy = (rev - prev_rev) / prev_rev
 
             # 2. Margins
             if rev > 0:
@@ -59,19 +65,19 @@ class DriverCalculator:
             if is_stmt.ebt > 0:
                 d.effective_tax_rate_pct = is_stmt.tax_expense / is_stmt.ebt
 
-            # 4. Working Capital Days
+            # 4. Working Capital Days (adjusted by period duration)
             if rev > 0 and bs_stmt.accounts_receivable > 0:
-                d.dso_days = (bs_stmt.accounts_receivable / rev) * 365.0
+                d.dso_days = (bs_stmt.accounts_receivable / rev) * days_in_period
             else:
                 d.dso_days = 0.0
 
             if cogs > 0 and bs_stmt.inventories > 0:
-                d.dio_days = (bs_stmt.inventories / cogs) * 365.0
+                d.dio_days = (bs_stmt.inventories / cogs) * days_in_period
             else:
                 d.dio_days = 0.0
 
             if cogs > 0 and bs_stmt.accounts_payable > 0:
-                d.dpo_days = (bs_stmt.accounts_payable / cogs) * 365.0
+                d.dpo_days = (bs_stmt.accounts_payable / cogs) * days_in_period
             else:
                 d.dpo_days = 0.0
 
@@ -99,27 +105,33 @@ class DriverCalculator:
 
     @staticmethod
     def build_summary_benchmarks(
-        drivers_by_year: Dict[int, OperationalDrivers]
+        drivers_by_year: Dict[Any, OperationalDrivers]
     ) -> Dict[str, Dict[str, Optional[float]]]:
         """
         Compute 3-Year Median and 5-Year Average benchmarks across computed drivers.
-        Returns: {"3_Year_Median": {...}, "5_Year_Average": {...}}
+        Benchmarks are strictly computed from full annual years to avoid interim distortion.
         """
-        sorted_years = sorted(drivers_by_year.keys())
-        last_3_years = sorted_years[-3:] if len(sorted_years) >= 3 else sorted_years
+        sorted_years = sorted(drivers_by_year.keys(), key=period_sort_key)
+        annual_years = [
+            y for y in sorted_years
+            if not re.search(r"[-_]?(?:q|tw)\d", str(y), re.IGNORECASE)
+        ]
+        if not annual_years:
+            annual_years = sorted_years
+        last_3_years = annual_years[-3:] if len(annual_years) >= 3 else annual_years
 
         keys = list(OperationalDrivers().to_dict().keys())
         median_3yr: Dict[str, Optional[float]] = {}
         avg_5yr: Dict[str, Optional[float]] = {}
 
         for k in keys:
-            # Last 3 years values
+            # Last 3 annual years values
             vals_3 = [drivers_by_year[y].to_dict().get(k) for y in last_3_years]
             vals_3_valid = [v for v in vals_3 if v is not None and isinstance(v, (int, float))]
             median_3yr[k] = statistics.median(vals_3_valid) if vals_3_valid else None
 
-            # All years values
-            vals_all = [drivers_by_year[y].to_dict().get(k) for y in sorted_years]
+            # All annual years values
+            vals_all = [drivers_by_year[y].to_dict().get(k) for y in annual_years]
             vals_all_valid = [v for v in vals_all if v is not None and isinstance(v, (int, float))]
             avg_5yr[k] = statistics.mean(vals_all_valid) if vals_all_valid else None
 
@@ -142,7 +154,7 @@ class BankingDriverCalculator:
     ) -> Dict[int, BankingDrivers]:
         """Compute operational drivers for each year for a banking entity."""
         drivers_by_year: Dict[int, BankingDrivers] = {}
-        sorted_years = sorted(years)
+        sorted_years = sorted(years, key=period_sort_key)
 
         for idx, yr in enumerate(sorted_years):
             d = BankingDrivers()
@@ -210,11 +222,17 @@ class BankingDriverCalculator:
 
     @staticmethod
     def build_summary_benchmarks(
-        drivers_by_year: Dict[int, BankingDrivers]
+        drivers_by_year: Dict[Any, BankingDrivers]
     ) -> Dict[str, Dict[str, Optional[float]]]:
-        """Compute 3-Year Median and Historical Average benchmarks across banking drivers."""
-        sorted_years = sorted(drivers_by_year.keys())
-        last_3_years = sorted_years[-3:] if len(sorted_years) >= 3 else sorted_years
+        """Compute 3-Year Median and Historical Average benchmarks strictly from full annual fiscal years."""
+        sorted_years = sorted(drivers_by_year.keys(), key=period_sort_key)
+        annual_years = [
+            y for y in sorted_years
+            if not re.search(r"[-_]?(?:q|tw)\d", str(y), re.IGNORECASE)
+        ]
+        if not annual_years:
+            annual_years = sorted_years
+        last_3_years = annual_years[-3:] if len(annual_years) >= 3 else annual_years
 
         keys = list(BankingDrivers().to_dict().keys())
         median_3yr: Dict[str, Optional[float]] = {}
@@ -225,7 +243,7 @@ class BankingDriverCalculator:
             vals_3_valid = [v for v in vals_3 if v is not None and isinstance(v, (int, float))]
             median_3yr[k] = statistics.median(vals_3_valid) if vals_3_valid else None
 
-            vals_all = [drivers_by_year[y].to_dict().get(k) for y in sorted_years]
+            vals_all = [drivers_by_year[y].to_dict().get(k) for y in annual_years]
             vals_all_valid = [v for v in vals_all if v is not None and isinstance(v, (int, float))]
             avg_hist[k] = statistics.mean(vals_all_valid) if vals_all_valid else None
 
@@ -234,4 +252,3 @@ class BankingDriverCalculator:
             "5_Year_Average": avg_hist,
             "Historical_Average": avg_hist
         }
-

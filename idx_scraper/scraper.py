@@ -8,7 +8,7 @@ import os
 import shutil
 import re
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import pandas as pd
 import openpyxl
 from .client import IDXClient
@@ -16,7 +16,11 @@ from .api import IDXApi
 from .excel_parser import parse_financial_statement_file, find_sheet_by_title_or_prefix
 from .xbrl_parser import XBRLParser
 from .multi_year import merge_statement_tables
-from .year_utils import format_year_range_slug, format_year_range_label
+from .year_utils import (
+    format_year_range_slug, format_year_range_label,
+    period_sort_key, format_period_label, format_period_slug,
+    is_annual_period, resolve_latest_filing_horizon
+)
 from .proforma import (
     FinancialNormalizer, DriverCalculator, BankingDriverCalculator,
     ReadyToForecastExporter, detect_archetype
@@ -25,10 +29,11 @@ from .proforma import (
 logger = logging.getLogger("idx_scraper.scraper")
 
 
-def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int], Optional[str]]:
+def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int], Optional[str], Optional[str]]:
     """
-    Extract (ticker, year, file_type) from a local file path.
-    file_type is 'xlsx' or 'zip' or None.
+    Extract (ticker, year, period, file_type) from a local file path.
+    file_type: 'xlsx' or 'zip' or None.
+    period: 'audit' (annual), 'tw1', 'tw2', 'tw3', or None.
     """
     fname = os.path.basename(file_path)
     lower_fname = fname.lower()
@@ -39,31 +44,51 @@ def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int],
     elif lower_fname.endswith((".zip", ".xbrl")):
         file_type = "zip"
     else:
-        return None, None, None
+        return None, None, None, None
 
     ticker = None
     year = None
+    period = "audit"
 
-    # Pattern 1: Standard IDX naming: FinancialStatement-YYYY-Tahunan-TICKER.ext
-    m = re.search(r"FinancialStatement-(\d{4})-[A-Za-z0-9_]+-([A-Za-z0-9]+)", fname, re.IGNORECASE)
+    # Pattern 1: Standard IDX naming: FinancialStatement-YYYY-PERIOD-TICKER.ext
+    m = re.search(r"FinancialStatement-(\d{4})-([A-Za-z0-9_]+)-([A-Za-z0-9]+)", fname, re.IGNORECASE)
     if m:
         year = int(m.group(1))
-        ticker = m.group(2).upper()
-        return ticker, year, file_type
+        p_raw = m.group(2).lower()
+        ticker = m.group(3).upper()
+        if "tw1" in p_raw or "q1" in p_raw:
+            period = "tw1"
+        elif "tw2" in p_raw or "q2" in p_raw or "sem1" in p_raw:
+            period = "tw2"
+        elif "tw3" in p_raw or "q3" in p_raw:
+            period = "tw3"
+        else:
+            period = "audit"
+        return ticker, year, period, file_type
 
-    # Pattern 2: TICKER_YYYY or TICKER-YYYY or TICKER YYYY
-    m = re.search(r"\b([A-Za-z]{4})[_\-\s]+(\d{4})\b", fname)
+    # Pattern 2: TICKER_YYYY_PERIOD or TICKER-YYYY-PERIOD
+    m = re.search(r"\b([A-Za-z]{4})[_\-\s]+(\d{4})[_\-\s]*(?:(tw[123]|q[123]|tahunan|audit))?\b", fname, re.IGNORECASE)
     if m:
         ticker = m.group(1).upper()
         year = int(m.group(2))
-        return ticker, year, file_type
+        p_raw = (m.group(3) or "").lower()
+        if "1" in p_raw: period = "tw1"
+        elif "2" in p_raw: period = "tw2"
+        elif "3" in p_raw: period = "tw3"
+        else: period = "audit"
+        return ticker, year, period, file_type
 
-    # Pattern 3: YYYY_TICKER or YYYY-TICKER
-    m = re.search(r"\b(\d{4})[_\-\s]+([A-Za-z]{4})\b", fname)
+    # Pattern 3: YYYY_PERIOD_TICKER or YYYY_TICKER
+    m = re.search(r"\b(\d{4})[_\-\s]*(?:(tw[123]|q[123]|tahunan|audit))?[_\-\s]+([A-Za-z]{4})\b", fname, re.IGNORECASE)
     if m:
         year = int(m.group(1))
-        ticker = m.group(2).upper()
-        return ticker, year, file_type
+        p_raw = (m.group(2) or "").lower()
+        ticker = m.group(3).upper()
+        if "1" in p_raw: period = "tw1"
+        elif "2" in p_raw: period = "tw2"
+        elif "3" in p_raw: period = "tw3"
+        else: period = "audit"
+        return ticker, year, period, file_type
 
     # Deep inspection from file content (most reliable for custom filenames)
     if file_type == "xlsx":
@@ -86,6 +111,18 @@ def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int],
                         my = re.search(r"\b(20\d{2})\b", v)
                         if my:
                             year = int(my.group(1))
+                    # Check reporting period end date for quarterly determination
+                    if any(x in k for x in ["tanggal akhir periode berjalan", "current period end date"]):
+                        if v.endswith("03-31"): period = "tw1"
+                        elif v.endswith("06-30"): period = "tw2"
+                        elif v.endswith("09-30"): period = "tw3"
+                        elif v.endswith("12-31"): period = "audit"
+                    if any(x in k for x in ["periode penyampaian", "submission period"]):
+                        v_low = v.lower()
+                        if "kuartal iii" in v_low or "triwulan iii" in v_low or "sembilan" in v_low: period = "tw3"
+                        elif "kuartal ii" in v_low or "semester" in v_low or "second" in v_low: period = "tw2"
+                        elif "kuartal i" in v_low or "triwulan i" in v_low or "first" in v_low: period = "tw1"
+                        elif "tahunan" in v_low or "annual" in v_low: period = "audit"
             wb.close()
         except Exception as e:
             logger.debug(f"Deep Excel inspection error on {file_path}: {e}")
@@ -102,6 +139,16 @@ def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int],
                 my = re.search(r"\b(20\d{2})\b", ed)
                 if my:
                     year = int(my.group(1))
+            ed = dei.get("CurrentPeriodEndDate", "")
+            if ed.endswith("03-31"): period = "tw1"
+            elif ed.endswith("06-30"): period = "tw2"
+            elif ed.endswith("09-30"): period = "tw3"
+            elif ed.endswith("12-31"): period = "audit"
+            subm = dei.get("PeriodOfFinancialStatementsSubmissions", "").lower()
+            if "tahunan" in subm or "annual" in subm: period = "audit"
+            elif "kuartal iii" in subm or "sembilan" in subm: period = "tw3"
+            elif "kuartal ii" in subm or "semester" in subm: period = "tw2"
+            elif "kuartal i" in subm or "first" in subm: period = "tw1"
         except Exception as e:
             logger.debug(f"Deep XBRL inspection error on {file_path}: {e}")
 
@@ -109,14 +156,22 @@ def inspect_file_metadata(file_path: str) -> Tuple[Optional[str], Optional[int],
     parent = os.path.basename(os.path.dirname(file_path))
     grandparent = os.path.basename(os.path.dirname(os.path.dirname(file_path)))
 
-    if not year and re.match(r"^\d{4}$", parent):
-        year = int(parent)
+    # Check parent folder for quarter tag (e.g. 2025_tw2)
+    m_p = re.match(r"^(\d{4})(?:[-_]?(tw[123]|q[123]))?$", parent, re.IGNORECASE)
+    if m_p:
+        if not year: year = int(m_p.group(1))
+        if m_p.group(2):
+            tag = m_p.group(2).lower()
+            if "1" in tag: period = "tw1"
+            elif "2" in tag: period = "tw2"
+            elif "3" in tag: period = "tw3"
+
     if not ticker and re.match(r"^[A-Za-z]{4}$", grandparent) and grandparent.upper() not in ("TEMP", "DATA", "TEST", "XLSX", "XBRL", "DOWNLOADS"):
         ticker = grandparent.upper()
     if not ticker and re.match(r"^[A-Za-z]{4}$", parent) and parent.upper() not in ("TEMP", "DATA", "TEST", "XLSX", "XBRL", "DOWNLOADS"):
         ticker = parent.upper()
 
-    return ticker, year, file_type
+    return ticker, year, period, file_type
 
 
 class IDXFinancialScraper:
@@ -272,19 +327,20 @@ class IDXFinancialScraper:
     def _compile_and_export_ready_model(
         self,
         ticker: str,
-        valid_years: List[int],
+        valid_years: List[Any],
         compiled_excel: Optional[str] = None,
         info_dict: Optional[Dict[str, str]] = None,
         copy_to_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Internal coordinator to normalize multi-year statements, compute operational drivers,
+        Internal coordinator to normalize multi-year / multi-period statements, compute operational drivers,
         and export the standardized Ready-to-Forecast Excel model.
         Used by both online scraping and offline local folder ingestion.
         """
         ticker = ticker.strip().upper()
         ticker_dir = os.path.join(self.output_dir, ticker)
-        year_slug = format_year_range_slug(valid_years)
+        sorted_periods = sorted(valid_years, key=period_sort_key)
+        year_slug = format_period_slug(sorted_periods)
 
         df_bs = pd.DataFrame()
         df_is = pd.DataFrame()
@@ -326,20 +382,43 @@ class IDXFinancialScraper:
         bs_dict = {}
         cf_dict = {}
 
-        print(f"[+] Normalizing statements across {len(valid_years)} year(s) (Primary: XBRL, Fallback: Excel)...")
+        print(f"[+] Normalizing statements across {len(sorted_periods)} period(s) (Primary: XBRL, Fallback: Excel)...")
 
-        for yr in valid_years:
-            year_dir = os.path.join(ticker_dir, str(yr))
-            zip_candidates = [
-                os.path.join(year_dir, "instance.zip"),
-                os.path.join(year_dir, f"instance-{yr}.zip"),
-            ]
-            if os.path.exists(year_dir):
-                for f_name in os.listdir(year_dir):
-                    if f_name.endswith(".zip"):
-                        candidate = os.path.join(year_dir, f_name)
-                        if candidate not in zip_candidates:
-                            zip_candidates.append(candidate)
+        for yr in sorted_periods:
+            p_str = str(yr)
+            m_q = re.match(r"^(\d{4})[-_]?(?:q|tw)(\d)", p_str, re.IGNORECASE)
+            if m_q:
+                y_num = int(m_q.group(1))
+                q_num = int(m_q.group(2))
+                candidate_subdirs = [
+                    f"{y_num}_tw{q_num}",
+                    f"{y_num}_q{q_num}",
+                    f"{y_num}-Q{q_num}",
+                    str(y_num),
+                    p_str
+                ]
+            else:
+                m_y = re.match(r"^(\d{4})", p_str)
+                y_num = int(m_y.group(1)) if m_y else None
+                candidate_subdirs = [p_str]
+                if y_num:
+                    candidate_subdirs.append(str(y_num))
+
+            candidate_paths = [os.path.join(ticker_dir, sd) for sd in candidate_subdirs]
+            zip_candidates = []
+            for cp in candidate_paths:
+                if os.path.exists(cp):
+                    zip_candidates.extend([
+                        os.path.join(cp, "instance.zip"),
+                        os.path.join(cp, f"instance-{yr}.zip")
+                    ])
+                    if y_num:
+                        zip_candidates.append(os.path.join(cp, f"instance-{y_num}.zip"))
+                    for f_name in os.listdir(cp):
+                        if f_name.endswith((".zip", ".xbrl")):
+                            candidate_z = os.path.join(cp, f_name)
+                            if candidate_z not in zip_candidates:
+                                zip_candidates.append(candidate_z)
 
             xbrl_loaded = False
             for z_path in zip_candidates:
@@ -354,22 +433,24 @@ class IDXFinancialScraper:
                             if detected_arch != archetype:
                                 archetype = detected_arch
 
+                            extract_y = y_num if y_num else yr
                             if archetype == "banking":
-                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts, yr, dei=dei)
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_banking_statements(facts, extract_y, dei=dei)
                             else:
-                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, yr, dei=dei)
+                                is_stmt, bs_stmt, cf_stmt = XBRLParser.extract_normalized_statements(facts, extract_y, dei=dei)
                             is_dict[yr] = is_stmt
                             bs_dict[yr] = bs_stmt
                             cf_dict[yr] = cf_stmt
                             xbrl_loaded = True
-                            print(f"  [+] Year {yr}: Loaded directly from primary XBRL data (BS Balance Check: {bs_stmt.balance_check:0.2f})")
+                            lbl = format_period_label(yr)
+                            print(f"  [+] Period {lbl}: Loaded directly from primary XBRL data (BS Balance Check: {bs_stmt.balance_check:0.2f})")
                             break
                     except Exception as e:
                         logger.warning(f"Failed to load XBRL for {ticker} {yr} from {z_path}: {e}")
 
-            if not xbrl_loaded:
+            if not xbrl_loaded and is_annual_period(yr) and y_num:
                 # Check if next year's ZIP exists and can provide prior-year comparative data
-                next_yr = yr + 1
+                next_yr = y_num + 1
                 next_yr_dir = os.path.join(ticker_dir, str(next_yr))
                 next_zip_candidates = [
                     os.path.join(next_yr_dir, "instance.zip"),
@@ -391,13 +472,15 @@ class IDXFinancialScraper:
                                     bs_dict[yr] = bs_stmt
                                     cf_dict[yr] = cf_stmt
                                     xbrl_loaded = True
-                                    print(f"  [+] Year {yr}: Extracted from {next_yr} comparative XBRL data (BS Balance Check: {bs_stmt.balance_check:0.2f})")
+                                    lbl = format_period_label(yr)
+                                    print(f"  [+] Period {lbl}: Extracted from {next_yr} comparative XBRL data (BS Balance Check: {bs_stmt.balance_check:0.2f})")
                                     break
                         except Exception as e:
                             logger.debug(f"Failed prior-period comparative extraction from {next_z}: {e}")
 
             if not xbrl_loaded:
-                print(f"  [*] Year {yr}: Falling back to Excel waterfall resolution...")
+                lbl = format_period_label(yr)
+                print(f"  [*] Period {lbl}: Falling back to Excel waterfall resolution...")
                 if archetype == "banking":
                     is_stmt, bs_stmt, cf_stmt = normalizer.normalize_banking_year(
                         year=yr,
@@ -421,11 +504,11 @@ class IDXFinancialScraper:
         # 4. Compute operational drivers
         if archetype == "banking":
             print("[+] Calculating historical banking drivers (NIM, CoF, LDR, CASA, BOPO/CIR, Credit Cost, ROA, ROE)...")
-            drivers_by_year = BankingDriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
+            drivers_by_year = BankingDriverCalculator.calculate_drivers(sorted_periods, is_dict, bs_dict, cf_dict)
             benchmarks = BankingDriverCalculator.build_summary_benchmarks(drivers_by_year)
         else:
             print("[+] Calculating historical forecasting drivers (DSO, DIO, DPO, margins, Capex)...")
-            drivers_by_year = DriverCalculator.calculate_drivers(valid_years, is_dict, bs_dict, cf_dict)
+            drivers_by_year = DriverCalculator.calculate_drivers(sorted_periods, is_dict, bs_dict, cf_dict)
             benchmarks = DriverCalculator.build_summary_benchmarks(drivers_by_year)
 
         # 5. Export 5-tab ready-to-forecast workbook
@@ -436,7 +519,7 @@ class IDXFinancialScraper:
         ReadyToForecastExporter.export(
             dest_path=output_path,
             ticker=ticker,
-            years=valid_years,
+            years=sorted_periods,
             is_dict=is_dict,
             bs_dict=bs_dict,
             cf_dict=cf_dict,
@@ -462,7 +545,7 @@ class IDXFinancialScraper:
             "status": "success",
             "ready_excel": output_path,
             "archetype": archetype,
-            "years": valid_years,
+            "years": sorted_periods,
             "is_dict": is_dict,
             "bs_dict": bs_dict,
             "cf_dict": cf_dict,
@@ -531,6 +614,125 @@ class IDXFinancialScraper:
             compiled_excel=compiled_excel
         )
 
+    def build_latest_ready_to_forecast(
+        self,
+        ticker: str,
+        max_annual_years: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Extract, normalize, and compile clean historical financial statements
+        and operational drivers into a Ready-to-Forecast Excel model using the
+        Dynamic Horizon Case A (latest completed annual years + available interim quarters).
+        """
+        ticker = ticker.strip().upper()
+        ticker_dir = os.path.join(self.output_dir, ticker)
+        os.makedirs(ticker_dir, exist_ok=True)
+
+        print(f"\n[+] Probing latest reporting horizon for {ticker} (Last {max_annual_years} Annual Years + Available Interim Quarters)...")
+        horizon = resolve_latest_filing_horizon(self.api, ticker, max_annual_years=max_annual_years)
+        annual_years = horizon.get("annual_years", [])
+        interim_quarters = horizon.get("interim_quarters", [])
+
+        ann_label = format_year_range_label(annual_years)
+        if interim_quarters:
+            q_desc = ", ".join(q["label"] for q in interim_quarters)
+            print(f"[+] Discovered Horizon: {ann_label} PLUS Interim Quarters [{q_desc}]")
+        else:
+            print(f"[+] Discovered Horizon: {ann_label} (No interim quarters published)")
+
+        downloaded_files = []
+        parsed_reports = []
+
+        # 1. Fetch annual filings
+        print(f"\n[+] Fetching {len(annual_years)} annual audited reports...")
+        res_annual = self.scrape_ticker(
+            ticker=ticker,
+            years=annual_years,
+            period="audit",
+            parse_and_export=False
+        )
+        downloaded_files.extend(res_annual.get("downloaded_files", []))
+        parsed_reports.extend(res_annual.get("parsed_reports", []))
+
+        # 2. Fetch interim filings
+        for q in interim_quarters:
+            i_year = q.get("year") or horizon.get("interim_year")
+            i_period = q.get("period")
+            q_key = q.get("key")
+            print(f"\n[+] Fetching interim report for {ticker} {i_year} {i_period.upper()} ({q['label']})...")
+
+            interim_subfolder = f"{i_year}_{i_period}"
+            q_dest_dir = os.path.join(ticker_dir, interim_subfolder)
+            os.makedirs(q_dest_dir, exist_ok=True)
+
+            try:
+                filings_res = self.api.get_financial_reports(
+                    year=i_year,
+                    period=i_period,
+                    kode_emiten=ticker,
+                    page=1,
+                    page_size=10
+                )
+                filings = filings_res.get("Results", [])
+                for filing in filings:
+                    dl_items = self.api.download_filing_attachments(filing, dest_dir=q_dest_dir)
+                    for item in dl_items:
+                        fpath = item.get("path")
+                        if fpath and os.path.exists(fpath):
+                            downloaded_files.append(fpath)
+                            if fpath.endswith(".xlsx"):
+                                try:
+                                    parsed = parse_financial_statement_file(fpath)
+                                    parsed["year"] = i_year
+                                    parsed["period_key"] = q_key
+                                    parsed_reports.append(parsed)
+                                except Exception as e:
+                                    logger.error(f"Error parsing interim Excel {fpath}: {e}")
+            except Exception as e:
+                logger.warning(f"Error fetching interim filings for {ticker} {i_year} {i_period}: {e}")
+
+        # 3. Compile multi-period raw workbook
+        all_periods = horizon.get("all_periods", [str(y) for y in annual_years])
+        period_slug = format_period_slug(all_periods)
+
+        compiled_excel_path = None
+        if parsed_reports:
+            print(f"\n[+] Compiling multi-period statements ({len(parsed_reports)} report(s))...")
+            parsed_reports.sort(key=lambda x: period_sort_key(x.get("period_key") or x.get("year", 0)))
+
+            bs_multi = merge_statement_tables(parsed_reports, "balance_sheet")
+            is_multi = merge_statement_tables(parsed_reports, "income_statement")
+            cf_multi = merge_statement_tables(parsed_reports, "cash_flow")
+
+            latest_info = parsed_reports[-1].get("general_info", {})
+            latest_info["Program Author / Developer"] = "abas YP74A"
+            info_df = pd.DataFrame(list(latest_info.items()), columns=["Field", "Value"])
+
+            compiled_excel_name = f"{ticker}_financial_statements_{period_slug}.xlsx"
+            compiled_excel_path = os.path.join(ticker_dir, compiled_excel_name)
+
+            with pd.ExcelWriter(compiled_excel_path, engine="openpyxl") as writer:
+                if not bs_multi.empty:
+                    bs_multi.to_excel(writer, sheet_name="Balance_Sheet", index=False)
+                if not is_multi.empty:
+                    is_multi.to_excel(writer, sheet_name="Income_Statement", index=False)
+                if not cf_multi.empty:
+                    cf_multi.to_excel(writer, sheet_name="Cash_Flow", index=False)
+                if not info_df.empty:
+                    info_df.to_excel(writer, sheet_name="General_Info", index=False)
+                writer.book.properties.creator = "abas YP74A"
+                writer.book.properties.lastModifiedBy = "abas YP74A"
+                writer.book.properties.description = "Compiled IDX Financial Statements by abas YP74A"
+
+            print(f"[OK] Successfully compiled raw multi-period workbook: {compiled_excel_path}")
+
+        # 4. Build and export Ready-to-Forecast Model
+        return self._compile_and_export_ready_model(
+            ticker=ticker,
+            valid_years=all_periods,
+            compiled_excel=compiled_excel_path
+        )
+
     def process_local_folder(
         self,
         folder_path: str,
@@ -540,8 +742,8 @@ class IDXFinancialScraper:
         Process an arbitrary local folder containing downloaded financial statement
         files (.xlsx and/or .zip XBRL packages) without any network calls to IDX.
         
-        Supports flat directories, year subfolders, and multi-company folders.
-        Automatically discovers tickers, years, and archetypes from files.
+        Supports flat directories, year/period subfolders, and multi-company folders.
+        Automatically discovers tickers, annual/interim periods, and archetypes from files.
 
         Args:
             folder_path: Path to directory or file containing downloaded financial statements.
@@ -580,40 +782,57 @@ class IDXFinancialScraper:
 
         print(f"\n[+] Scanning {len(discovered_files)} file(s) in: {clean_path}...")
 
-        # 2. Extract metadata and group by ticker and year
-        # companies[ticker][year] = {"xlsx": [...], "zip": [...]}
-        companies: Dict[str, Dict[int, Dict[str, List[str]]]] = {}
+        # 2. Extract metadata and group by ticker and period
+        # companies[ticker][period_key] = {"year": year, "period": period, "folder_tag": f_tag, "xlsx": [], "zip": []}
+        companies: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
         for fpath in discovered_files:
-            ticker, year, ftype = inspect_file_metadata(fpath)
+            ticker, year, period, ftype = inspect_file_metadata(fpath)
             if ticker and year and ftype:
                 if ticker not in companies:
                     companies[ticker] = {}
-                if year not in companies[ticker]:
-                    companies[ticker][year] = {"xlsx": [], "zip": []}
-                companies[ticker][year][ftype].append(fpath)
-                logger.debug(f"Detected: {ticker} {year} [{ftype}] -> {os.path.basename(fpath)}")
+
+                if period in ("tw1", "tw2", "tw3"):
+                    q_num = period[2]
+                    p_key = f"{year}-Q{q_num}"
+                    f_tag = f"{year}_{period}"
+                else:
+                    p_key = str(year)
+                    f_tag = str(year)
+
+                if p_key not in companies[ticker]:
+                    companies[ticker][p_key] = {
+                        "year": year,
+                        "period": period or "audit",
+                        "folder_tag": f_tag,
+                        "xlsx": [],
+                        "zip": []
+                    }
+                companies[ticker][p_key][ftype].append(fpath)
+                logger.debug(f"Detected: {ticker} {p_key} [{ftype}] -> {os.path.basename(fpath)}")
             else:
                 logger.debug(f"Skipping unclassified file: {fpath}")
 
         if not companies:
-            print(f"[-] Could not identify valid stock ticker or reporting years from files in: {clean_path}")
+            print(f"[-] Could not identify valid stock ticker or reporting periods from files in: {clean_path}")
             return []
 
         print(f"[+] Discovered {len(companies)} company/companies in local files:")
-        for t, y_dict in sorted(companies.items()):
-            print(f"    • {t}: {sorted(y_dict.keys())}")
+        for t, p_dict in sorted(companies.items()):
+            sorted_k = sorted(p_dict.keys(), key=period_sort_key)
+            formatted_k = [format_period_label(k) for k in sorted_k]
+            print(f"    • {t}: {formatted_k}")
 
         # 3. Process each discovered company
         results: List[Dict[str, Any]] = []
 
-        for ticker, yr_dict in sorted(companies.items()):
-            valid_years = sorted(yr_dict.keys())
-            year_slug = format_year_range_slug(valid_years)
-            year_label = format_year_range_label(valid_years)
+        for ticker, p_dict in sorted(companies.items()):
+            sorted_periods = sorted(p_dict.keys(), key=period_sort_key)
+            period_slug = format_period_slug(sorted_periods)
+            period_label = ", ".join(format_period_label(p) for p in sorted_periods)
 
             print(f"\n" + "=" * 74)
-            print(f"      PROCESSING LOCAL FILES FOR {ticker} ({year_label})")
+            print(f"      PROCESSING LOCAL FILES FOR {ticker} ({period_label})")
             print("=" * 74)
 
             ticker_dir = os.path.join(self.output_dir, ticker)
@@ -622,14 +841,16 @@ class IDXFinancialScraper:
             parsed_reports = []
             info_dict = {}
 
-            # Stage files into output_dir/<ticker>/<year>/
-            for yr in valid_years:
-                dest_yr_dir = os.path.join(ticker_dir, str(yr))
-                os.makedirs(dest_yr_dir, exist_ok=True)
+            # Stage files into output_dir/<ticker>/<folder_tag>/
+            for p_key in sorted_periods:
+                p_info = p_dict[p_key]
+                yr = p_info["year"]
+                dest_p_dir = os.path.join(ticker_dir, p_info["folder_tag"])
+                os.makedirs(dest_p_dir, exist_ok=True)
 
                 # Copy/stage ZIP files
-                for zf in yr_dict[yr]["zip"]:
-                    dest_z = os.path.join(dest_yr_dir, "instance.zip")
+                for zf in p_info["zip"]:
+                    dest_z = os.path.join(dest_p_dir, "instance.zip")
                     if os.path.abspath(zf) != os.path.abspath(dest_z):
                         try:
                             shutil.copy2(zf, dest_z)
@@ -637,8 +858,8 @@ class IDXFinancialScraper:
                             logger.debug(f"Copying {zf} -> {dest_z}: {e}")
 
                 # Copy/stage XLSX files & parse
-                for xf in yr_dict[yr]["xlsx"]:
-                    dest_x = os.path.join(dest_yr_dir, os.path.basename(xf))
+                for xf in p_info["xlsx"]:
+                    dest_x = os.path.join(dest_p_dir, os.path.basename(xf))
                     if os.path.abspath(xf) != os.path.abspath(dest_x):
                         try:
                             shutil.copy2(xf, dest_x)
@@ -647,17 +868,18 @@ class IDXFinancialScraper:
                     try:
                         parsed = parse_financial_statement_file(xf)
                         parsed["year"] = yr
+                        parsed["period_key"] = p_key
                         parsed_reports.append(parsed)
                         if "general_info" in parsed and parsed["general_info"]:
                             info_dict.update(parsed["general_info"])
                     except Exception as e:
                         logger.warning(f"Error parsing local Excel file {xf}: {e}")
 
-            # Compile multi-year raw tables if Excel reports were parsed
+            # Compile multi-period raw tables if Excel reports were parsed
             compiled_excel_path = None
             if parsed_reports:
-                print(f"[+] Compiling multi-year statements ({len(parsed_reports)} report(s))...")
-                parsed_reports.sort(key=lambda x: x.get("year", 0))
+                print(f"[+] Compiling multi-period statements ({len(parsed_reports)} report(s))...")
+                parsed_reports.sort(key=lambda x: period_sort_key(x.get("period_key") or x.get("year", 0)))
 
                 bs_multi = merge_statement_tables(parsed_reports, "balance_sheet")
                 is_multi = merge_statement_tables(parsed_reports, "income_statement")
@@ -667,7 +889,7 @@ class IDXFinancialScraper:
                 latest_info["Program Author / Developer"] = "abas YP74A"
                 info_df = pd.DataFrame(list(latest_info.items()), columns=["Field", "Value"])
 
-                compiled_excel_name = f"{ticker}_financial_statements_{year_slug}.xlsx"
+                compiled_excel_name = f"{ticker}_financial_statements_{period_slug}.xlsx"
                 compiled_excel_path = os.path.join(ticker_dir, compiled_excel_name)
 
                 with pd.ExcelWriter(compiled_excel_path, engine="openpyxl") as writer:
@@ -683,7 +905,7 @@ class IDXFinancialScraper:
                     writer.book.properties.lastModifiedBy = "abas YP74A"
                     writer.book.properties.description = "Compiled IDX Financial Statements by abas YP74A"
 
-                print(f"[OK] Successfully compiled raw multi-year workbook: {compiled_excel_path}")
+                print(f"[OK] Successfully compiled raw multi-period workbook: {compiled_excel_path}")
                 if os.path.abspath(scan_root) != os.path.abspath(ticker_dir):
                     try:
                         shutil.copy2(compiled_excel_path, os.path.join(scan_root, compiled_excel_name))
@@ -693,7 +915,7 @@ class IDXFinancialScraper:
             # Build and export Ready-to-Forecast Model
             res = self._compile_and_export_ready_model(
                 ticker=ticker,
-                valid_years=valid_years,
+                valid_years=sorted_periods,
                 compiled_excel=compiled_excel_path,
                 info_dict=info_dict if info_dict else None,
                 copy_to_dir=scan_root if os.path.abspath(scan_root) != os.path.abspath(ticker_dir) else None
