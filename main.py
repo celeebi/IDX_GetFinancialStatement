@@ -237,6 +237,32 @@ def display_ready_to_forecast_summary(res: dict):
 
 def run_interactive():
     print_banner()
+    print("Select Mode:")
+    print("  [1] Auto-Fetch from IDX (Online - Enter Ticker & Years)")
+    print("  [2] Process Local Folder (Offline - Drag & Drop Folder with .xlsx / .zip)")
+    print("  [Q] Quit")
+    mode_choice = input("\nChoice [1/2/Q, default: 1]: ").strip().lower()
+
+    if mode_choice in ("q", "quit", "exit"):
+        print("Exiting.")
+        sys.exit(0)
+
+    if mode_choice == "2":
+        folder_input = input("\nEnter Folder Path (or drag and drop folder here): ").strip().strip('"').strip("'")
+        if not folder_input:
+            print("[-] Folder path cannot be empty.")
+            return
+        scraper = IDXFinancialScraper(output_dir="downloads")
+        results = scraper.process_local_folder(folder_input)
+        if results:
+            for res in results:
+                if res.get("status") == "success":
+                    display_ready_to_forecast_summary(res)
+                    print(f"\n[OK] Ready-to-Forecast workbook saved to:\n     {os.path.abspath(res['ready_excel'])}\n")
+        else:
+            print("[-] No financial statements could be processed from the specified path.")
+        return
+
     api = IDXApi()
 
     while True:
@@ -314,6 +340,8 @@ def main():
     parser.add_argument("--start-year", type=int, default=None, help="Start year (optional)")
     parser.add_argument("--end-year", type=int, default=None, help="End year (optional)")
     parser.add_argument("-p", "--period", type=str, default="audit", choices=["audit", "tw1", "tw2", "tw3"], help="Period (default: audit)")
+    parser.add_argument("--input-dir", "--dir", "-d", dest="input_dir", type=str, help="Process financial statements from a local directory (offline mode)")
+    parser.add_argument("-f", "--file", type=str, help="Process a single financial statement file (.xlsx or .zip)")
     parser.add_argument("-o", "--output-dir", type=str, default="downloads", help="Directory to save downloads")
     parser.add_argument("--ready-to-forecast", "--proforma", action="store_true", help="Generate clean 5-tab ready-to-forecast model")
     parser.add_argument("--list", action="store_true", help="List all available stock tickers")
@@ -327,6 +355,21 @@ def main():
         print(f"\n[+] Total Active Emitens: {len(emitens)}")
         table_data = [[e["KodeEmiten"], e["NamaEmiten"]] for e in emitens]
         print(tabulate(table_data, headers=["Ticker", "Company Name"], tablefmt="simple"))
+        return
+
+    if args.input_dir or args.file:
+        target_path = args.input_dir or args.file
+        print_banner()
+        print(f"\n[+] Offline Mode: Ingesting local files from:\n    {os.path.abspath(target_path)}")
+        scraper = IDXFinancialScraper(output_dir=args.output_dir)
+        results = scraper.process_local_folder(target_path)
+        if results:
+            for res in results:
+                if res.get("status") == "success":
+                    display_ready_to_forecast_summary(res)
+                    print(f"\n[OK] Ready-to-Forecast workbook saved to:\n     {os.path.abspath(res['ready_excel'])}\n")
+        else:
+            print("[-] No financial statements could be processed from the specified path.")
         return
 
     if args.search:
