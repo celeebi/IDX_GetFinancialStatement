@@ -62,10 +62,11 @@ echo Select Mode:
 echo   [1] Auto-Fetch Latest 5 Years + Interim Quarters (Recommended)
 echo   [2] Custom Online Ticker Search (Enter Specific Years / Range)
 echo   [3] Process Local Folder (Offline - Drag & Drop Folder with .xlsx/.zip)
+echo   [4] Launch Interactive Web UI (Browser Dashboard & Excel Downloader)
 echo   [Q] Quit
 echo.
 set "MODE="
-set /p "MODE=Enter choice [1, 2, 3, or Q, Default: 1]: "
+set /p "MODE=Enter choice [1, 2, 3, 4, or Q, Default: 1]: "
 if "!MODE!"=="" set "MODE=1"
 
 if /i "!MODE!"=="Q" goto :exit_app
@@ -75,6 +76,18 @@ if /i "!MODE!"=="EXIT" goto :exit_app
 if "!MODE!"=="1" goto :auto_latest_mode
 if "!MODE!"=="2" goto :ask_ticker
 if "!MODE!"=="3" goto :offline_folder_mode
+if "!MODE!"=="4" goto :web_ui_mode
+if /i "!MODE!"=="W" goto :web_ui_mode
+
+:web_ui_mode
+cls
+echo ========================================================================
+echo  Launching Interactive Web UI at http://127.0.0.1:8000 ...
+echo  Created by: abas YP74A
+echo ========================================================================
+echo.
+"%PYTHON_EXEC%" "%~dp0web_app.py"
+goto :main_loop
 
 :auto_latest_mode
 echo.

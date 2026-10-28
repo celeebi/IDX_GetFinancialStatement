@@ -7,7 +7,7 @@
 
 An automated financial statement scraper, sector-aware normalizer, and operational driver engine for **PT Bursa Efek Indonesia (Indonesia Stock Exchange / IDX - `idx.co.id`)**.
 
-Built specifically for **equity research analysts, finance students, and investment modelers**, this tool eliminates hours of manual data entry from messy IDX filings and instantly delivers clean, standardized 3-statement financials and forecasting drivers.
+Built specifically for **equity research analysts, finance students, and investment modelers**, this tool eliminates hours of manual data entry from messy IDX filings and instantly delivers clean, standardized 3-statement financials and forecasting drivers—both via an **Interactive Web Dashboard** and a high-performance **CLI / Windows Launcher**.
 
 ---
 
@@ -18,13 +18,21 @@ Building 3-statement financial models, DCF valuations, or equity research notes 
 - Excel layouts shift, line items disappear into disaggregated notes, and numbers are reported in varying units (Rupiah, Thousands, Millions, Billions).
 - Financial institutions (banks, insurance, multifinance) follow completely different accounting structures than general corporates.
 
-**This engine solves all of that in a single command.** Enter a stock ticker (e.g., `ASII`, `BBCA`, `TLKM`) and get an instant, normalized 3-statement financial model with pre-calculated operational drivers—both in your terminal and exported to a presentation-ready 5-tab Excel spreadsheet.
+**This engine solves all of that in a single command or one click in your browser.** Enter a stock ticker (e.g., `ASII`, `BBCA`, `BBRI`, `TLKM`) and get an instant, normalized 3-statement financial model with pre-calculated operational drivers—both displayed in an interactive web dashboard and exported to a presentation-ready 5-tab Excel spreadsheet.
 
 ---
 
 ## Key Features for Financial Analysts
 
-### 1. Instant 3 Financial Statements
+### 1. Interactive Web UI Dashboard
+- **Instant Search**: Autocomplete search across all 960+ listed companies on IDX.
+- **At-a-Glance Summary**: Key highlight cards for Revenue, Net Income, NIM, ROE, CASA, and working capital efficiency.
+- **Multi-Tab Statements**: Interactive tables for Income Statement, Balance Sheet, Cash Flow, and Forecasting Drivers.
+- **Interactive Visual Charts**: Chart.js trajectories for historical growth, margins, and asset composition.
+- **1-Click Excel Downloader**: Download the complete 5-tab `.xlsx` model directly from the top navigation bar.
+- **Offline Drag & Drop Ingestion**: Upload downloaded `.xlsx` and `.zip` files directly from your browser.
+
+### 2. Instant 3 Financial Statements
 Pulls and standardizes the complete financial triad:
 - **Consolidated Income Statement**
 - **Consolidated Balance Sheet**
@@ -32,7 +40,7 @@ Pulls and standardizes the complete financial triad:
 
 All figures are automatically detected, normalized, and scaled to **Millions IDR (Juta Rupiah)** for clean, readable analysis.
 
-### 2. Sector-Aware Modeling (Corporate vs. Banking)
+### 3. Sector-Aware Modeling (Corporate vs. Banking)
 Traditional corporate models (which focus on COGS, Gross Profit, and inventory turns) mathematically break down for financial institutions. The engine automatically detects the company's sector from filing metadata and applies the appropriate financial framework:
 
 | Financial Dimension | Non-Financial Corporates (ASII, TLKM, ICBP, UNTR) | Financial Institutions & Banks (BBCA, BBRI, BMRI, BFIN) |
@@ -45,47 +53,58 @@ Traditional corporate models (which focus on COGS, Gross Profit, and inventory t
 | **Working Capital** | Working Capital Days (DSO, DIO, DPO) | Loan-to-Deposit Ratio (LDR), CASA Ratio (%) |
 | **Risk & Quality** | Debt-to-EBITDA, Interest Coverage | Credit Cost / Provisioning Rate (CKPN %), CIR / BOPO |
 
-### 3. Guaranteed Balance Sheet Integrity ($\Delta = \mathbf{0.00}$)
+### 4. Guaranteed Balance Sheet Integrity ($\Delta = \mathbf{0.00}$)
 Never worry about out-of-balance models:
 $$\text{Total Assets} - (\text{Total Liabilities} + \text{Total Equity}) == \mathbf{0.00}$$
 For conventional banks with Islamic banking windows (e.g., BBCA, BMRI), `Dana Syirkah Temporer` is automatically reconciled, ensuring perfect accounting balance across all years.
 
-### 4. Ready-to-Forecast Operational Drivers
+### 5. Ready-to-Forecast Operational Drivers
 To jumpstart your pro forma projections and DCF valuation without guesswork, the engine computes historical operational drivers for every period:
 - **Corporate Drivers**: Revenue Growth (YoY), Gross Margin %, SG&A % Rev, Operating Margin %, Days Sales Outstanding (DSO), Days Inventory Outstanding (DIO), Days Payable Outstanding (DPO), Capex % of Revenue, D&A % of Net PP&E, Dividend Payout Ratio.
 - **Banking Drivers**: Loan Growth (YoY), Deposit Growth (YoY), Net Interest Margin (NIM %), Cost of Funds (CoF %), Loan-to-Deposit Ratio (LDR %), CASA Ratio (%), Cost-to-Income / BOPO (CIR %), Credit Cost / Provisioning Rate (%), ROA %, ROE %, Equity-to-Assets %.
 - **Statistical Baselines**: Automatically computes **3-Year Medians** and **Historical Averages** to serve as baseline inputs for your forecast assumptions.
 
-### 5. Flexible Historical Horizons
-Analyze whatever historical period your valuation requires:
-- **Single Year**: Pull just 2023 (`--year 2023`).
-- **Sub-Range**: Pull a 3-year period (`--years 2021-2023`).
-- **Disjoint Selection**: Pull alternate or specific years (`--years 2018,2021,2024`).
-- **Full Historical Archive**: Probe and extract every online filing published on IDX (`--all`).
-- **Standard 5-Year Horizon**: Default 5-year analysis (`2020-2024`).
+### 6. Dynamic Reporting Horizon (Case A)
+Automatically resolves the latest available reporting calendar:
+- If year $Y$ annual is latest, pulls the last 5 completed annual years ($Y-4$ to $Y$) **PLUS** all published interim quarters for year $Y+1$ (`Q1`, `Q2`, `Q3`).
+- If year $Y+1$ annual is already published, takes strictly the latest 5 completed annual years.
 
-### 6. Professional 5-Tab Excel Financial Model
+### 7. Professional 5-Tab Excel Financial Model
 Generates a formatted workbook styled for financial presentation:
 - `Historical_IS`: Consolidated Income Statement.
 - `Historical_BS`: Consolidated Balance Sheet with balance check validation.
 - `Historical_CF`: Consolidated Cash Flow Statement (Operating, Investing, Financing).
 - `Forecasting_Drivers`: Historical ratios, working capital metrics, 3-Yr Medians & Averages.
-- `General_Info`: Company profile, sector, presentation currency, and auditor opinions.
+- `General_Info`: Company profile, sector, presentation currency, and author credit.
 
 ---
 
 ## Quick Start Guide
 
-### Option A: 1-Click Automated Launcher (Windows — No Terminal Needed!)
-If you are on Windows and don't want to use the command line:
-1. Simply double-click **`run.bat`** in this project folder.
-2. The launcher automatically detects or creates the virtual environment and installs required libraries.
-3. Type the **Stock Ticker** (e.g. `BBCA`), **Start Year** (e.g. `2020`), and **End Year** (e.g. `2024`).
-4. Once finished, select **[1]** to open the output folder in Windows Explorer or **[2]** to immediately launch the generated Excel model!
+### Option A: Interactive Web UI (Browser Dashboard & 1-Click Excel Downloader)
+For the most interactive visual experience:
+1. Double-click **`run_web.bat`** (or run `python web_app.py` / `python main.py --web`).
+2. Your default web browser will automatically open at **`http://localhost:8000`**.
+3. Type any stock ticker (e.g. `BBRI`, `BBCA`, `TLKM`, `ASII`) and click **Analyze**.
+4. Explore interactive statements, forecasting drivers, and charts directly in your browser.
+5. Click **"Download Excel Model (.xlsx)"** to save the workbook instantly!
 
 ---
 
-### Option B: Terminal / CLI Setup (Linux, macOS, or Windows Power Users)
+### Option B: 1-Click Automated Launcher (Windows Terminal Menu)
+If you prefer terminal prompts without typing python commands:
+1. Double-click **`run.bat`** in this project folder.
+2. The launcher automatically detects or creates the virtual environment and installs required libraries.
+3. Select your desired mode:
+   - **[1] Auto-Fetch Latest 5 Years + Interim Quarters (Recommended)**
+   - **[2] Custom Online Ticker Search (Enter Specific Years / Range)**
+   - **[3] Process Local Folder (Offline - Drag & Drop Folder with .xlsx/.zip)**
+   - **[4] Launch Interactive Web UI (Browser Dashboard & Excel Downloader)**
+4. Once finished, select **[1]** to open the output folder or **[2]** to immediately launch the generated Excel model!
+
+---
+
+### Option C: Terminal / CLI Setup (Linux, macOS, or Windows Power Users)
 
 #### 1. Installation
 Clone the repository and install dependencies:
@@ -106,12 +125,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Run Interactive Mode
+#### 2. Run Interactive Mode
 Run the tool without arguments for a guided prompt:
 ```bash
 python main.py
 ```
-Simply enter a stock ticker (e.g. `BBCA`, `ASII`, `TLKM`) and your desired year horizon (e.g. `2020-2024`, `2023`, or `all`).
+Or start the web dashboard directly:
+```bash
+python main.py --web
+```
 
 ---
 
@@ -121,6 +143,9 @@ Simply enter a stock ticker (e.g. `BBCA`, `ASII`, `TLKM`) and your desired year 
 Generate the complete 3-statement model and forecasting drivers:
 
 ```bash
+# Auto-probe latest 5 completed annual years + available interim quarters
+python main.py --ticker BBRI --latest-interim --ready-to-forecast
+
 # Analyze Bank Central Asia (BBCA) over a 5-year horizon (2020-2024)
 python main.py --ticker BBCA --years 2020-2024 --ready-to-forecast
 
@@ -134,18 +159,18 @@ python main.py --ticker TLKM --year 2023 --ready-to-forecast
 python main.py --ticker BBCA --all --ready-to-forecast
 ```
 
-### 2. Search Listed Companies
+### 2. Offline Local Folder Ingestion
+Parse manually downloaded `.xlsx` and `.zip` files from a folder without network calls:
+```bash
+python main.py --input-dir "C:\path\to\downloaded_reports" --ready-to-forecast
+```
+
+### 3. Search Listed Companies
 Find tickers or verify company names across 960+ listed companies on IDX:
 ```bash
 python main.py --search "bank"
 python main.py --search "telekomunikasi"
 python main.py --search "astra"
-```
-
-### 3. Raw Table Compilation Only
-If you only need raw multi-year tables without normalization:
-```bash
-python main.py --ticker BBRI --years 2021-2023
 ```
 
 ---
@@ -168,14 +193,19 @@ When running `--ready-to-forecast`, the output file `{TICKER}_ReadyToForecast_Fi
 
 ```
 Project_scrapping/
+├── web_app.py                               # FastAPI Interactive Web Dashboard
 ├── main.py                                  # CLI and Interactive Entry Point
+├── run.bat                                  # Windows Multi-Mode Terminal Launcher
+├── run_web.bat                              # 1-Click Desktop Web UI Launcher
 ├── requirements.txt
 ├── README.md
+├── templates/
+│   └── index.html                           # Modern Tailwind + Alpine.js + Chart.js Dashboard
 ├── idx_scraper/
 │   ├── client.py                            # Rate-limited HTTP client with TLS fingerprinting
 │   ├── api.py                               # Typed IDX REST API Endpoints
 │   ├── scraper.py                           # High-level pipeline coordinator
-│   ├── year_utils.py                        # Flexible year range parsing engine
+│   ├── year_utils.py                        # Flexible year range & dynamic horizon engine
 │   ├── excel_parser.py                      # Multi-taxonomy sheet finder & Excel parser
 │   ├── xbrl_parser.py                       # Canonical XBRL instance document parser
 │   ├── multi_year.py                        # Multi-year table compiler
@@ -188,20 +218,9 @@ Project_scrapping/
 └── downloads/
     └── {TICKER}/
         ├── {YEAR}/
-        │   ├── FinancialStatement-{YEAR}-Tahunan-{TICKER}.xlsx
-        │   └── instance.zip
         ├── {TICKER}_financial_statements_{YEARS}.xlsx       (Raw compiled tables)
         └── {TICKER}_ReadyToForecast_Financials_{YEARS}.xlsx (5-Tab Ready-to-Forecast Model)
 ```
-
----
-
-## Under the Hood
-
-For technical contributors and developers interested in the underlying pipeline:
-- **Primary XBRL Ingestion**: The engine directly reads the raw `instance.xbrl` document from IDX's filing package. XBRL concepts carry fixed semantic tags (e.g. `SalesAndRevenue`, `TotalInterestAndShariaIncome`, `Assets`), completely bypassing Excel spacing changes, cell shifts, or UI language differences.
-- **Anti-Bot Handling**: IDX's portal uses Cloudflare Turnstile protection. Requests are executed through `curl_cffi` using browser TLS fingerprint simulation (`impersonate="chrome131"`) and automatic retry backoff, ensuring uninterrupted data extraction.
-- **Unit Normalization**: Detects filing scale metadata (`Satuan Penuh`, `Ribuan`, `Jutaan`, `Miliaran`) and converts all statements into a consistent **Millions IDR** denomination.
 
 ---
 

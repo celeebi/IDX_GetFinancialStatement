@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en" x-data="financialApp()" :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDX Financial Modeling Engine | by abas YP74A</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        brand: {
+                            500: '#10b981',
+                            600: '#059669',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .num-cell { font-variant-numeric: tabular-nums; }
+        /* Custom scrollbar for tables */
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-50 bg-white/80 dark:bg-navy-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-bold text-xl shadow-inner">
+                    IDX
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                        Financial Statement & Modeling Engine
+                        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">v1.0.0</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        PT Bursa Efek Indonesia Automation • <span class="font-medium text-emerald-600 dark:text-emerald-400">Created by: abas YP74A</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <!-- Offline Upload Modal Trigger -->
+                <button @click="showUploadModal = true" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                    Offline Files
+                </button>
+
+                <!-- Dark / Light Mode Toggle -->
+                <button @click="darkMode = !darkMode" class="p-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Toggle Theme">
+                    <template x-if="!darkMode">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    </template>
+                    <template x-if="darkMode">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                    </template>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Search Bar & Controls -->
+        <div class="bg-white dark:bg-navy-900 rounded-xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row items-center gap-3">
+                
+                <!-- Ticker Autocomplete Input -->
+                <div class="relative flex-1 w-full" @click.outside="showSuggestions = false">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <input 
+                        type="text" 
+                        x-model="tickerInput" 
+                        @focus="showSuggestions = true"
+                        @input="filterSuggestions()"
+                        @keydown.enter="runScrape()"
+                        placeholder="Search Ticker (e.g. BBRI, BBCA, TLKM, ASII, BMRI, ICBP)..." 
+                        class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold uppercase tracking-wider text-sm transition"
+                    >
+                    <!-- Suggestions Dropdown -->
+                    <div x-show="showSuggestions && filteredSuggestions.length > 0" x-cloak class="absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl py-1 text-sm">
+                        <template x-for="item in filteredSuggestions" :key="item.ticker">
+                            <div @click="selectTicker(item.ticker)" class="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex justify-between items-center">
+                                <span class="font-bold text-emerald-600 dark:text-emerald-400" x-text="item.ticker"></span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400 truncate ml-2" x-text="item.name"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Mode Selector -->
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <select x-model="selectedMode" class="w-full sm:w-auto py-2.5 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-navy-950 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                        <option value="latest_interim">5 Annual Years + Latest Quarters (Dynamic Case A)</option>
+                        <option value="custom">Standard 5 Annual Years (2020-2024)</option>
+                    </select>
+
+                    <button 
+                        @click="runScrape()" 
+                        :disabled="isLoading || !tickerInput.trim()"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-sm transition shadow-sm hover:shadow"
+                    >
+                        <template x-if="!isLoading">
+                            <span class="flex items-center gap-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                Analyze
+                            </span>
+                        </template>
+                        <template x-if="isLoading">
+                            <span class="flex items-center gap-1.5">
+                                <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                Processing...
+                            </span>
+                        </template>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Ticker Badges -->
+            <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-medium mr-1">Popular:</span>
+                <template x-for="t in ['BBRI', 'BBCA', 'BMRI', 'TLKM', 'ASII', 'BRIS', 'ICBP']" :key="t">
+                    <button @click="selectTicker(t); runScrape()" class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500/10 hover:text-emerald-500 border border-slate-200 dark:border-slate-700 transition font-semibold" x-text="t"></button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Live Loading Status Banner -->
+        <div x-show="isLoading" x-cloak class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6 text-center space-y-3 animate-pulse">
+            <div class="inline-flex p-3 rounded-full bg-emerald-500/20 text-emerald-500">
+                <svg class="animate-spin w-6 h-6" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+            </div>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="loadingStatusTitle"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto" x-text="loadingStatusMsg"></p>
+        </div>
+
+        <!-- Error Message -->
+        <div x-show="errorMessage" x-cloak class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span x-text="errorMessage"></span>
+            </div>
+            <button @click="errorMessage = ''" class="text-red-500 hover:underline text-xs">Dismiss</button>
+        </div>
+
+        <!-- Financial Dashboard (When Data Loaded) -->
+        <div x-show="dataLoaded && !isLoading" x-cloak class="space-y-6">
+
+            <!-- Company Overview Banner & Excel Download -->
+            <div class="bg-white dark:bg-navy-900 rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white" x-text="companyData.ticker"></h2>
+                        <span class="text-slate-400 dark:text-slate-500 font-light text-xl">|</span>
+                        <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200" x-text="companyData.company_name || companyData.ticker"></h3>
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase tracking-wider" x-text="companyData.archetype === 'banking' ? 'Banking & Financial Model' : 'Corporate Model'"></span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                        <span class="flex items-center gap-1">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            Reporting Horizon: <span class="font-bold text-slate-700 dark:text-slate-200" x-text="formatHorizonText()"></span>
+                        </span>
+                        
+                        <!-- Balance Sheet Integrity Badge -->
+                        <span class="flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-xs" :class="isBalanceReconciled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span x-text="isBalanceReconciled ? 'Balance Sheet Reconciled (OK 0.00)' : 'Balance Sheet Discrepancy Detected'"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Primary Action: Download Ready-to-Forecast Excel -->
+                <div class="flex items-center gap-3">
+                    <a 
+                        :href="'/api/download/' + companyData.ticker" 
+                        class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition transform hover:-translate-y-0.5"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Download Excel Model (.xlsx)
+                    </a>
+                </div>
+            </div>
+
+            <!-- Key Highlight Metric Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <template x-for="card in highlightCards" :key="card.title">
+                    <div class="bg-white dark:bg-navy-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-1">
+                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 block truncate" x-text="card.title"></span>
+                        <div class="text-lg font-black text-slate-900 dark:text-white num-cell" x-text="card.value"></div>
+                        <span class="text-xs text-slate-400 block truncate" x-text="card.subtitle"></span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Multi-Tab Statement Navigation -->
+            <div class="bg-white dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div class="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto text-sm font-semibold">
+                    <button @click="activeTab = 'overview'" :class="activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition">
+                        📊 Overview & Trends
+                    </button>
+                    <button @click="activeTab = 'is'" :class="activeTab === 'is' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition">
+                        📄 Income Statement
+                    </button>
+                    <button @click="activeTab = 'bs'" :class="activeTab === 'bs' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition flex items-center gap-1.5">
+                        🏛️ Balance Sheet
+                        <span class="w-2 h-2 rounded-full bg-emerald-500" title="Check OK (0.00)"></span>
+                    </button>
+                    <button @click="activeTab = 'cf'" :class="activeTab === 'cf' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition">
+                        💸 Cash Flow
+                    </button>
+                    <button @click="activeTab = 'drivers'" :class="activeTab === 'drivers' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition">
+                        📈 Drivers & Benchmarks
+                    </button>
+                    <button @click="activeTab = 'info'" :class="activeTab === 'info' ? 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-navy-950/50' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'" class="px-5 py-3.5 whitespace-nowrap transition">
+                        ℹ️ General Info
+                    </button>
+                </div>
+
+                <!-- Tab 1: Overview & Visual Trends -->
+                <div x-show="activeTab === 'overview'" class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-slate-50 dark:bg-navy-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Revenue & Net Profit Trajectory (Millions IDR)</h4>
+                            <div class="h-64 relative">
+                                <canvas id="revenueProfitChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-navy-950 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200" x-text="companyData.archetype === 'banking' ? 'Banking Margins & Returns (%)' : 'Operational Margins (%)'"></h4>
+                            <div class="h-64 relative">
+                                <canvas id="marginsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Income Statement Table -->
+                <div x-show="activeTab === 'is'" class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 dark:bg-navy-950 text-slate-700 dark:text-slate-300 font-bold uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Line Item (Millions IDR)</th>
+                                <template x-for="p in companyData.period_labels" :key="p">
+                                    <th class="py-3 px-4 text-right" x-text="p"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <template x-for="row in companyData.statements.income_statement" :key="row.metric">
+                                <tr :class="isKeyMetric(row.metric) ? 'bg-slate-50 dark:bg-slate-800/40 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'">
+                                    <td class="py-2.5 px-4" :class="isKeyMetric(row.metric) ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'" x-text="row.metric"></td>
+                                    <template x-for="p in companyData.years" :key="p">
+                                        <td class="py-2.5 px-4 text-right num-cell" :class="row.values[p] < 0 ? 'text-red-500 dark:text-red-400' : (isKeyMetric(row.metric) ? 'text-slate-900 dark:text-white font-bold' : '')" x-text="formatNumber(row.values[p])"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 3: Balance Sheet Table -->
+                <div x-show="activeTab === 'bs'" class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 dark:bg-navy-950 text-slate-700 dark:text-slate-300 font-bold uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Line Item (Millions IDR)</th>
+                                <template x-for="p in companyData.period_labels" :key="p">
+                                    <th class="py-3 px-4 text-right" x-text="p"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <template x-for="row in companyData.statements.balance_sheet" :key="row.metric">
+                                <tr :class="row.metric.includes('BALANCE CHECK') ? 'bg-emerald-500/10 font-black border-y-2 border-emerald-500/40' : (isKeyMetric(row.metric) ? 'bg-slate-50 dark:bg-slate-800/40 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20')">
+                                    <td class="py-2.5 px-4" :class="row.metric.includes('BALANCE CHECK') ? 'text-emerald-600 dark:text-emerald-400' : (isKeyMetric(row.metric) ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300')" x-text="row.metric"></td>
+                                    <template x-for="p in companyData.years" :key="p">
+                                        <td class="py-2.5 px-4 text-right num-cell font-bold" :class="row.metric.includes('BALANCE CHECK') ? (Math.abs(row.values[p] || 0) < 0.05 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500') : (row.values[p] < 0 ? 'text-red-500 dark:text-red-400' : '')" x-text="row.metric.includes('BALANCE CHECK') ? (Math.abs(row.values[p] || 0) < 0.05 ? 'OK (0.00)' : formatNumber(row.values[p])) : formatNumber(row.values[p])"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 4: Cash Flow Statement Table -->
+                <div x-show="activeTab === 'cf'" class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 dark:bg-navy-950 text-slate-700 dark:text-slate-300 font-bold uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Line Item (Millions IDR)</th>
+                                <template x-for="p in companyData.period_labels" :key="p">
+                                    <th class="py-3 px-4 text-right" x-text="p"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <template x-for="row in companyData.statements.cash_flow" :key="row.metric">
+                                <tr :class="isKeyMetric(row.metric) ? 'bg-slate-50 dark:bg-slate-800/40 font-bold' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'">
+                                    <td class="py-2.5 px-4" :class="isKeyMetric(row.metric) ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'" x-text="row.metric"></td>
+                                    <template x-for="p in companyData.years" :key="p">
+                                        <td class="py-2.5 px-4 text-right num-cell" :class="row.values[p] < 0 ? 'text-red-500 dark:text-red-400' : (isKeyMetric(row.metric) ? 'text-slate-900 dark:text-white font-bold' : '')" x-text="formatNumber(row.values[p])"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 5: Forecasting Drivers & Benchmarks -->
+                <div x-show="activeTab === 'drivers'" class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 dark:bg-navy-950 text-slate-700 dark:text-slate-300 font-bold uppercase text-xs tracking-wider border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Operational Ratio / Driver</th>
+                                <template x-for="p in companyData.period_labels" :key="p">
+                                    <th class="py-3 px-4 text-right" x-text="p"></th>
+                                </template>
+                                <th class="py-3 px-4 text-right bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">3-Yr Median</th>
+                                <th class="py-3 px-4 text-right bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Historical Avg</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <template x-for="row in companyData.drivers" :key="row.metric">
+                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
+                                    <td class="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-200" x-text="row.metric"></td>
+                                    <template x-for="p in companyData.years" :key="p">
+                                        <td class="py-2.5 px-4 text-right num-cell" x-text="formatRatio(row.metric, row.values[p])"></td>
+                                    </template>
+                                    <td class="py-2.5 px-4 text-right num-cell font-bold bg-emerald-500/5 text-emerald-600 dark:text-emerald-400" x-text="formatRatio(row.metric, companyData.benchmarks['3_Year_Median']?.[row.metric])"></td>
+                                    <td class="py-2.5 px-4 text-right num-cell font-bold bg-emerald-500/5 text-emerald-600 dark:text-emerald-400" x-text="formatRatio(row.metric, companyData.benchmarks['Historical_Average']?.[row.metric])"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tab 6: General Info -->
+                <div x-show="activeTab === 'info'" class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-4xl">
+                        <template x-for="(val, key) in companyData.general_info" :key="key">
+                            <div class="p-3.5 rounded-lg bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-slate-800 flex flex-col">
+                                <span class="text-xs text-slate-400 font-medium" x-text="key"></span>
+                                <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-1" x-text="val"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Offline Upload Modal -->
+    <div x-show="showUploadModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div @click.outside="showUploadModal = false" class="bg-white dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Offline Financial Statements Ingestion
+                </h3>
+                <button @click="showUploadModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">&times;</button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Upload downloaded <code class="text-emerald-500 font-bold">.xlsx</code> or <code class="text-emerald-500 font-bold">.zip</code> XBRL instance files. The engine will automatically classify tickers, annual years, and interim quarters.
+            </p>
+
+            <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 text-center hover:border-emerald-500 transition cursor-pointer" @click="$refs.fileInput.click()">
+                <svg class="w-10 h-10 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">Click to Select Files (.xlsx / .zip)</span>
+                <span class="text-xs text-slate-400 block mt-1">Multi-file selection supported</span>
+                <input type="file" x-ref="fileInput" multiple accept=".xlsx,.zip,.xls,.xbrl" class="hidden" @change="handleFileUpload($event)">
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button @click="showUploadModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-navy-900/40 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+        <p>IDX Financial Statement & Ready-to-Forecast Modeling Engine • Developed by <span class="font-semibold text-slate-700 dark:text-slate-200">abas YP74A</span></p>
+    </footer>
+
+    <!-- Alpine.js Application Logic -->
+    <script>
+        function financialApp() {
+            return {
+                darkMode: true,
+                tickerInput: '',
+                selectedMode: 'latest_interim',
+                isLoading: false,
+                loadingStatusTitle: '',
+                loadingStatusMsg: '',
+                errorMessage: '',
+                dataLoaded: false,
+                activeTab: 'overview',
+                showSuggestions: false,
+                showUploadModal: false,
+                emitens: [],
+                filteredSuggestions: [],
+                companyData: {},
+                highlightCards: [],
+                charts: {},
+
+                async init() {
+                    try {
+                        const res = await fetch('/api/emitens');
+                        if (res.ok) {
+                            this.emitens = await res.json();
+                        }
+                    } catch (e) {
+                        console.debug("Could not pre-fetch emitens list:", e);
+                    }
+                },
+
+                filterSuggestions() {
+                    const q = this.tickerInput.trim().toUpperCase();
+                    if (!q) {
+                        this.filteredSuggestions = [];
+                        return;
+                    }
+                    this.filteredSuggestions = this.emitens
+                        .filter(e => e.ticker.includes(q) || e.name.toUpperCase().includes(q))
+                        .slice(0, 10);
+                },
+
+                selectTicker(t) {
+                    this.tickerInput = t;
+                    this.showSuggestions = false;
+                },
+
+                formatHorizonText() {
+                    if (!this.companyData.years || !this.companyData.years.length) return '';
+                    return this.companyData.years.join(' • ');
+                },
+
+                get isBalanceReconciled() {
+                    if (!this.companyData.statements?.balance_sheet) return false;
+                    const checkRow = this.companyData.statements.balance_sheet.find(r => r.metric.includes('BALANCE CHECK'));
+                    if (!checkRow) return true;
+                    return Object.values(checkRow.values).every(v => Math.abs(v || 0) < 0.05);
+                },
+
+                isKeyMetric(metric) {
+                    const keys = [
+                        'Gross Profit', 'EBITDA', 'Operating Income (EBIT)', 'Net Income',
+                        'TOTAL ASSETS', 'TOTAL LIABILITIES', 'TOTAL EQUITY',
+                        'Net Interest Income (NII)', 'Total Operating Income', 'Total Customer Deposits (DPK)'
+                    ];
+                    return keys.some(k => metric.toLowerCase() === k.toLowerCase());
+                },
+
+                formatNumber(val) {
+                    if (val === null || val === undefined || isNaN(val)) return '-';
+                    const num = Number(val);
+                    if (num === 0) return '-';
+                    const formatted = Math.abs(num).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                    return num < 0 ? `(${formatted})` : formatted;
+                },
+
+                formatRatio(metric, val) {
+                    if (val === null || val === undefined || isNaN(val)) return '-';
+                    const num = Number(val);
+                    const m = metric.toLowerCase();
+                    if (m.includes('days') || m.includes('dso') || m.includes('dio') || m.includes('dpo')) {
+                        return num.toFixed(1) + ' d';
+                    }
+                    return (num * 100).toFixed(2) + '%';
+                },
+
+                async runScrape() {
+                    const t = this.tickerInput.trim().toUpperCase();
+                    if (!t) return;
+                    this.isLoading = true;
+                    this.errorMessage = '';
+                    this.loadingStatusTitle = `Analyzing ${t}...`;
+                    this.loadingStatusMsg = "Probing filing history on idx.co.id and resolving reporting horizon...";
+
+                    try {
+                        const response = await fetch('/api/scrape', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ticker: t,
+                                mode: this.selectedMode
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok || result.status !== 'success') {
+                            throw new Error(result.message || 'Scraping failed');
+                        }
+
+                        this.processFinancialResult(result);
+                        this.dataLoaded = true;
+                    } catch (err) {
+                        this.errorMessage = err.message || 'Failed to process financial statements.';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async handleFileUpload(event) {
+                    const files = event.target.files;
+                    if (!files || !files.length) return;
+
+                    this.showUploadModal = false;
+                    this.isLoading = true;
+                    this.errorMessage = '';
+                    this.loadingStatusTitle = "Processing Local Financial Files...";
+                    this.loadingStatusMsg = `Scanning and ingesting ${files.length} uploaded files...`;
+
+                    const formData = new FormData();
+                    for (let i = 0; i < files.length; i++) {
+                        formData.append('files', files[i]);
+                    }
+
+                    try {
+                        const response = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok || result.status !== 'success') {
+                            throw new Error(result.message || 'Upload processing failed');
+                        }
+
+                        this.tickerInput = result.ticker;
+                        this.processFinancialResult(result);
+                        this.dataLoaded = true;
+                    } catch (err) {
+                        this.errorMessage = err.message || 'Failed to process uploaded files.';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                processFinancialResult(data) {
+                    this.companyData = data;
+                    const latestP = data.years[data.years.length - 1];
+                    const isBank = data.archetype === 'banking';
+
+                    // Build Highlight Cards
+                    const isRows = data.statements.income_statement || [];
+                    const bsRows = data.statements.balance_sheet || [];
+                    const drvRows = data.drivers || [];
+
+                    const getVal = (rows, metricName) => {
+                        const r = rows.find(x => x.metric.toLowerCase().includes(metricName.toLowerCase()));
+                        return r ? r.values[latestP] : 0;
+                    };
+
+                    const getDrv = (metricName) => {
+                        const r = drvRows.find(x => x.metric.toLowerCase().includes(metricName.toLowerCase()));
+                        return r ? r.values[latestP] : null;
+                    };
+
+                    const rev = isBank ? getVal(isRows, 'Interest & Sharia Income') : getVal(isRows, 'Revenue');
+                    const ni = getVal(isRows, 'Net Income');
+                    const assets = getVal(bsRows, 'TOTAL ASSETS');
+
+                    if (isBank) {
+                        const nim = getDrv('Net Interest Margin');
+                        const roe = getDrv('Return on Equity');
+                        const ldr = getDrv('Loan-to-Deposit');
+                        this.highlightCards = [
+                            { title: 'Total Assets', value: 'Rp ' + this.formatNumber(assets), subtitle: latestP },
+                            { title: 'Interest Income', value: 'Rp ' + this.formatNumber(rev), subtitle: latestP },
+                            { title: 'Net Income', value: 'Rp ' + this.formatNumber(ni), subtitle: latestP },
+                            { title: 'NIM (%)', value: nim !== null ? (nim * 100).toFixed(2) + '%' : '-', subtitle: 'Net Interest Margin' },
+                            { title: 'ROE (%)', value: roe !== null ? (roe * 100).toFixed(2) + '%' : '-', subtitle: 'Return on Equity' },
+                            { title: 'LDR (%)', value: ldr !== null ? (ldr * 100).toFixed(1) + '%' : '-', subtitle: 'Loan-to-Deposit' },
+                        ];
+                    } else {
+                        const gm = getDrv('Gross Margin');
+                        const nm = getDrv('Net Profit Margin');
+                        const dso = getDrv('DSO');
+                        this.highlightCards = [
+                            { title: 'Total Assets', value: 'Rp ' + this.formatNumber(assets), subtitle: latestP },
+                            { title: 'Revenue', value: 'Rp ' + this.formatNumber(rev), subtitle: latestP },
+                            { title: 'Net Income', value: 'Rp ' + this.formatNumber(ni), subtitle: latestP },
+                            { title: 'Gross Margin', value: gm !== null ? (gm * 100).toFixed(1) + '%' : '-', subtitle: latestP },
+                            { title: 'Net Margin', value: nm !== null ? (nm * 100).toFixed(1) + '%' : '-', subtitle: latestP },
+                            { title: 'DSO (Days)', value: dso !== null ? dso.toFixed(1) + ' d' : '-', subtitle: 'Receivables Days' },
+                        ];
+                    }
+
+                    // Render Charts in next tick
+                    setTimeout(() => this.renderCharts(), 100);
+                },
+
+                renderCharts() {
+                    const ctxRev = document.getElementById('revenueProfitChart');
+                    const ctxMar = document.getElementById('marginsChart');
+                    if (!ctxRev || !ctxMar) return;
+
+                    if (this.charts.rev) this.charts.rev.destroy();
+                    if (this.charts.mar) this.charts.mar.destroy();
+
+                    const labels = this.companyData.period_labels;
+                    const years = this.companyData.years;
+                    const isBank = this.companyData.archetype === 'banking';
+                    const isRows = this.companyData.statements.income_statement;
+                    const drvRows = this.companyData.drivers;
+
+                    const getSeries = (rows, name) => {
+                        const r = rows.find(x => x.metric.toLowerCase().includes(name.toLowerCase()));
+                        return years.map(y => r ? (r.values[y] || 0) : 0);
+                    };
+
+                    const getDrvSeries = (name) => {
+                        const r = drvRows.find(x => x.metric.toLowerCase().includes(name.toLowerCase()));
+                        return years.map(y => r ? (r.values[y] !== null ? r.values[y] * 100 : null) : null);
+                    };
+
+                    // Chart 1: Revenue & Net Profit
+                    const revName = isBank ? 'Interest & Sharia Income' : 'Revenue';
+                    this.charts.rev = new Chart(ctxRev, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: isBank ? 'Interest Income' : 'Revenue', data: getSeries(isRows, revName), backgroundColor: '#10b981' },
+                                { label: 'Net Income', data: getSeries(isRows, 'Net Income'), backgroundColor: '#6366f1' }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: this.darkMode ? '#cbd5e1' : '#475569' } } },
+                            scales: {
+                                x: { ticks: { color: this.darkMode ? '#94a3b8' : '#64748b' } },
+                                y: { ticks: { color: this.darkMode ? '#94a3b8' : '#64748b' } }
+                            }
+                        }
+                    });
+
+                    // Chart 2: Margins
+                    const datasetsMar = isBank ? [
+                        { label: 'NIM (%)', data: getDrvSeries('Net Interest Margin'), borderColor: '#10b981', tension: 0.3 },
+                        { label: 'ROE (%)', data: getDrvSeries('Return on Equity'), borderColor: '#f59e0b', tension: 0.3 },
+                        { label: 'ROA (%)', data: getDrvSeries('Return on Assets'), borderColor: '#6366f1', tension: 0.3 }
+                    ] : [
+                        { label: 'Gross Margin (%)', data: getDrvSeries('Gross Margin'), borderColor: '#10b981', tension: 0.3 },
+                        { label: 'Operating Margin (%)', data: getDrvSeries('Operating Margin'), borderColor: '#f59e0b', tension: 0.3 },
+                        { label: 'Net Margin (%)', data: getDrvSeries('Net Profit Margin'), borderColor: '#6366f1', tension: 0.3 }
+                    ];
+
+                    this.charts.mar = new Chart(ctxMar, {
+                        type: 'line',
+                        data: { labels: labels, datasets: datasetsMar },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: this.darkMode ? '#cbd5e1' : '#475569' } } },
+                            scales: {
+                                x: { ticks: { color: this.darkMode ? '#94a3b8' : '#64748b' } },
+                                y: { ticks: { color: this.darkMode ? '#94a3b8' : '#64748b' } }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -242,12 +242,18 @@ def run_interactive():
     print("  [1] Auto-Fetch Latest 5 Years + Interim Quarters (Recommended)")
     print("  [2] Custom Online Ticker Search (Enter Specific Years / Range)")
     print("  [3] Process Local Folder (Offline - Drag & Drop Folder with .xlsx / .zip)")
+    print("  [4] Launch Interactive Web UI (Browser Dashboard & Excel Downloader)")
     print("  [Q] Quit")
-    mode_choice = input("\nChoice [1/2/3/Q, default: 1]: ").strip().lower()
+    mode_choice = input("\nChoice [1/2/3/4/Q, default: 1]: ").strip().lower()
 
     if mode_choice in ("q", "quit", "exit"):
         print("Exiting.")
         sys.exit(0)
+
+    if mode_choice in ("4", "w", "web"):
+        from web_app import start_server
+        start_server()
+        return
 
     if mode_choice == "3":
         folder_input = input("\nEnter Folder Path (or drag and drop folder here): ").strip().strip('"').strip("'")
@@ -386,10 +392,16 @@ def main():
     parser.add_argument("-f", "--file", type=str, help="Process a single financial statement file (.xlsx or .zip)")
     parser.add_argument("-o", "--output-dir", type=str, default="downloads", help="Directory to save downloads")
     parser.add_argument("--ready-to-forecast", "--proforma", action="store_true", help="Generate clean 5-tab ready-to-forecast model")
+    parser.add_argument("--web", "--app", action="store_true", help="Launch the interactive Web UI dashboard in your browser")
     parser.add_argument("--list", action="store_true", help="List all available stock tickers")
     parser.add_argument("--search", type=str, help="Search company name or ticker")
 
     args = parser.parse_args()
+
+    if args.web:
+        from web_app import start_server
+        start_server()
+        return
 
     if args.list:
         api = IDXApi()
